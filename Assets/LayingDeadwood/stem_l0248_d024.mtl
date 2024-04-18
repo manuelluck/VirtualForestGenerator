@@ -1,0 +1,13 @@
+# Blender MTL File: 'SceneGeneration.blend'
+# Material Count: 1
+
+newmtl M_tree_stumps.089
+Ns 200.000049
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Kd D:\\Unity\\Projects\\My project\\Assets\\NatureManufacture Assets\\Meadow Environment Dynamic Nature\\Tree Stump\\Models\\Textures\\T_Tree_Stumps_BC.tga

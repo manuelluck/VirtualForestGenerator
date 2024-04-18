@@ -1,0 +1,12 @@
+# Blender 3.5.0 MTL File: 'SceneGeneration.blend'
+# www.blender.org
+
+newmtl M_photoscanned_rocks_01.003
+Ns 200.000046
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Kd D:/Unity/Projects/My project/Assets/NatureManufacture Assets/Meadow Environment Dynamic Nature/Rocks/Rocks/Models/Textures/T_Photoscanned_rocks_01_BC.tga
