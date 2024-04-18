@@ -3,7 +3,7 @@ import sys
 
 blenderExePath      = 'C:\\Users\\luckmanu\\Tools\\Blender\\blender.exe'
 blenderFile         = 'D:\\Blender\\VirtualForestGenerator\\Preview\\PreviewScene.blend'
-blenderScriptPath   = 'D:\\Blender\\VirtualForestGeneratior\\Scripts\\run_console.py'
+blenderScriptPath   = 'D:\\Blender\\VirtualForestGenerator\\Scripts\\run_console.py'
 blenderWorkingDir   = 'C:\\Users\\luckmanu\\Tools\\Blender' 
 
 if len(sys.argv) > 1:
@@ -13,3 +13,5 @@ else:
     
 for _ in range(n):
     subprocess.run([f'{blenderExePath}',f'{blenderFile}','--background',f'--python',f'{blenderScriptPath}'],shell=True,cwd=blenderWorkingDir)
+
+input('Press a key to finish')
