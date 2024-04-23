@@ -1,13 +1,20 @@
 # Virtual Forest Generator
 
-Tool aims at generating virtual scans with Helios++ (https://github.com/3dgeo-heidelberg/helios.git) from scenes created in blender (blender.org). 
-As default the resulting pointcloud should be label according to Point2Tree (https://github.com/SmartForest-no/Point2tree.git) with 4 classes (ground, cwd, vegetation, wood). 
+The tool aims at generating virtual scans with Helios++ (https://github.com/3dgeo-heidelberg/helios.git) from scenes created in blender (blender.org). 
+As default, the resulting point cloud should be labeled according to Point2Tree (https://github.com/SmartForest-no/Point2tree.git) with 4 classes (ground, cwd, vegetation, wood). 
 
 ## Installation
 
-(1) Pull the repo from github (git pull https://github.com/manuelluck/VirtualForestGenerator.git) at the desired location.
-(2) In VirtualForestGenerator.py adjust the path according to your blender and helios++ installation.
+(1) Install blender (blender.org)
+(2) Clone Helios++ (https://github.com/3dgeo-heidelberg/helios.git)
+
+(3) Clone repo from GitHub (git clone https://github.com/manuelluck/VirtualForestGenerator.git) at the desired location.
+(4) In VirtualForestGenerator.py adjust the path according to your blender and Helios++ installation.
 
 ## Usage
 
-(1) Run VirtualForestGenerator.py
+(5) Run VirtualForestGenerator.py 
+	open command console
+	optional: "YourRepoDrive:" (e.g., D:)
+	cd "your_repo_location" to locate the main folder (cd Data\VirtualForestGenerator)
+	python VirtualForestGenerator.py
