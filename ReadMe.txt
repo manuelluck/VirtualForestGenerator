@@ -11,6 +11,9 @@ As default, the resulting point cloud should be labeled according to Point2Tree 
 (3) Clone repo from GitHub (git clone https://github.com/manuelluck/VirtualForestGenerator.git) at the desired location.
 (4) In VirtualForestGenerator.py adjust the path according to your blender and Helios++ installation.
 
+(5) Add packages to blenders python. 
+    Adjust "/Scripts/miscellaneous/installPackagesInBlenderPython.py" with your blender python path.
+
 ## Usage
 
 (5) Run VirtualForestGenerator.py 

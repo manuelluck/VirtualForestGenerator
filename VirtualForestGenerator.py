@@ -1,10 +1,10 @@
 import subprocess
 import sys
 
-blenderExePath      = 'C:\\Users\\luckmanu\\Tools\\Blender\\blender.exe'
-blenderFile         = 'D:\\Blender\\VirtualForestGenerator\\Preview\\PreviewScene.blend'
-blenderScriptPath   = 'D:\\Blender\\VirtualForestGenerator\\Scripts\\run_console.py'
-blenderWorkingDir   = 'C:\\Users\\luckmanu\\Tools\\Blender' 
+blenderExePath      = 'C:\\Tools\\Blender\\blender.exe'
+blenderFile         = 'C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Preview\\PreviewScene.blend'
+blenderScriptPath   = 'C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Scripts\\run_console.py'
+blenderWorkingDir   = 'C:\\Tools\\Blender' 
 
 if len(sys.argv) > 1:
     n = int(sys.argv[1])
