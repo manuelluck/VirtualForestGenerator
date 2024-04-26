@@ -33,6 +33,10 @@ import subprocess
 path = dict()
 # Main folder
 path['main']    = '\\'.join(os.path.dirname(os.path.abspath(__file__)).split('\\')[:-1])
+
+# Helios Installation
+path['helios'] = sys.argv[-1]
+
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
 
@@ -2069,8 +2073,8 @@ class worldGenerator():
             for line in sceneXML:
                 t.write(f'{line}\n')
 
-    def run_Helios(self,helios_path='H:/Helios/helios-plusplus-win/',flags=''):
-        self.helios['path'] = helios_path
+    def run_Helios(self,flags=''):
+        self.helios['path'] = self.path['helios']
         subprocess.run([f'{self.helios["path"]}run/helios.exe',
                         f'{str(self.helios["survey_path"])}',
                         f'{flags}'],
