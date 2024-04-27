@@ -26,7 +26,6 @@ import sys
 # Console for Helios++
 import subprocess
 
-
 # ---------------------------------------------------------------------
 #                    Functions & Parameters
 # ---------------------------------------------------------------------
@@ -34,8 +33,13 @@ path = dict()
 # Main folder
 path['main']    = '\\'.join(os.path.dirname(os.path.abspath(__file__)).split('\\')[:-1])
 
+pathDict = dict()
+with open(f'{path["main"]}\\PathFile.txt') as file:
+    for line in file:
+        pathDict[line.split(',')[0]] = line.split(',')[1][:-1]
+
 # Helios Installation
-path['helios'] = sys.argv[-1]
+path['helios'] = pathDict['heliosPath']
 
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
@@ -163,6 +167,9 @@ class worldGenerator():
         self.parameters['kd_factor']    = 1/1000
         
         # Get new scene nr
+        if not any(['Output' in dir for dir in os.listdir(path['main'])]):
+            os.mkdir(path['output'])
+
         scenes = os.listdir(path['output'])
         if len(scenes) > 0:
             self.parameters['scene_nr'] = int(max([int(scene.split('scene_nr_')[1]) for scene in scenes]))+1
@@ -2075,7 +2082,7 @@ class worldGenerator():
 
     def run_Helios(self,flags=''):
         self.helios['path'] = self.path['helios']
-        subprocess.run([f'{self.helios["path"]}run/helios.exe',
+        subprocess.run([f'{self.helios["path"]}run/helios.py',
                         f'{str(self.helios["survey_path"])}',
                         f'{flags}'],
                        cwd=self.helios['path'])
@@ -2175,22 +2182,21 @@ class worldGenerator():
         print('finished')
         print('')
         
-        
         # Adding ground objects that occupy space
         print('Spawn laying Deadwood')
-        self.spawnDeadWoodStemSamples('H:\\Blender\\WorldGeneration\\Assets\\LayingDeadwood',n_stems=n_laying_dw)
+        self.spawnDeadWoodStemSamples(self.path['laying_dw'],n_stems=n_laying_dw)
         print('finished')
         print('')
         print('Spawn Rocks')        
-        self.spawnRocks('H:\\Blender\\WorldGeneration\\Assets\\Rocks',n_rocks=n_rocks)
+        self.spawnRocks(self.path['rocks'],n_rocks=n_rocks)
         print('finished')
         print('')
         print('Spawn Stumps')
-        self.spawnStumps('H:\\Blender\\WorldGeneration\\Assets\\TreeStumps',n_stumps=n_stumps,radius=1,lower_factor=1,elevate_factor=1/4)
+        self.spawnStumps(self.path['tree_stumps'],n_stumps=n_stumps,radius=1,lower_factor=1,elevate_factor=1/4)
         print('finished')
         print('')
         print('Spawn Plants')
-        self.spawnBroadLeafedPlant(objpath='H:\\Blender\\GroundVegetation\\broadLeafPlant.obj',n_sets=n_plants,set_size=15) 
+        self.spawnBroadLeafedPlant(objpath=f'{self.path["ground_veg"]}\\broadLeafPlant.obj',n_sets=n_plants,set_size=15) 
         print('finished')
         print('')   
         

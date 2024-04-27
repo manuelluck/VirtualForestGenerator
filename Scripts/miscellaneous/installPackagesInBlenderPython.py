@@ -1,6 +1,6 @@
 import subprocess
 
-blenderPythonPath = C:\\Tools\\Blender\\4.1\\python\\bin\\python.exe
+blenderPythonPath = 'C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Blender36\\3.6\\python\\bin\\python.exe'
 
 packages = ['numpy','pandas','scipy','fsspec']
 for package in packages:

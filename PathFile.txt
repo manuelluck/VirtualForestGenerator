@@ -1,0 +1,5 @@
+blenderExePath,C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Blender36\\blender.exe
+blenderFile,C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Preview\\PreviewScene.blend
+blenderScriptPath,C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Scripts\\run_console.py
+blenderWorkingDir,C:\\Tools\\Python\\Github\\VirtualForestGenerator\\Blender36\\
+heliosPath,C:\\Tools\\Python\\Github\\helios\\

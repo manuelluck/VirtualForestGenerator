@@ -6,6 +6,12 @@ As default, the resulting point cloud should be labeled according to Point2Tree 
 ## Installation
 
 (1) Install blender (blender.org)
+    1.1 download and zip Sapling4 from https://github.com/abpy/improved-sapling-tree-generator/tree/master 
+    1.2 open new blender file 
+    1.3 open preferences
+    1.4 navigate to Add-ons
+    1.5 install and check the downloaded zip
+    1.6 Save preferences
 (2) Clone Helios++ (https://github.com/3dgeo-heidelberg/helios.git)
 
 (3) Clone repo from GitHub (git clone https://github.com/manuelluck/VirtualForestGenerator.git) at the desired location.
