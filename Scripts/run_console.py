@@ -2082,7 +2082,7 @@ class worldGenerator():
 
     def run_Helios(self,flags=''):
         self.helios['path'] = self.path['helios']
-        subprocess.run([f'{self.helios["path"]}run/helios.py',
+        subprocess.run([f'{self.helios["path"]}run/helios.exe',
                         f'{str(self.helios["survey_path"])}',
                         f'{flags}'],
                        cwd=self.helios['path'])
@@ -2149,9 +2149,10 @@ class worldGenerator():
                             else:
                                 with open(f'{self.helios["helios_output_dir"]}/{self.helios["scene_name"]}.xyz' , "a") as w:
                                     for line in f: 
-                                        l = line.split()
-                                        label = self.label_converter(int(l[-3]))
-                                        w.write(f"{l[0]} {l[1]} {l[2]} {label}\n")
+                                        l = line.split(' ')
+                                        if len(l) > 1:
+                                            label = self.label_converter(int(l[8]))
+                                            w.write(f"{l[0]} {l[1]} {l[2]} {label}\n")
 
                 if removeLegs:
                     deleteSubfolderAndFiles(folder)    

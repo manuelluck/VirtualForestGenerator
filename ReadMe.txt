@@ -12,7 +12,7 @@ As default, the resulting point cloud should be labeled according to Point2Tree 
     1.4 navigate to Add-ons
     1.5 install and check the downloaded zip
     1.6 Save preferences
-(2) Clone Helios++ (https://github.com/3dgeo-heidelberg/helios.git)
+(2) Download Helios++ for windows (https://github.com/3dgeo-heidelberg/helios/releases)
 
 (3) Clone repo from GitHub (git clone https://github.com/manuelluck/VirtualForestGenerator.git) at the desired location.
 (4) In VirtualForestGenerator.py adjust the path according to your blender and Helios++ installation.
