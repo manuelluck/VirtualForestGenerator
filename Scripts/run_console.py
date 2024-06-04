@@ -132,6 +132,13 @@ def calculate_angles(d_x,d_y,d_z):
 
     return angle_x, angle_y, angle_z    
 
+def create_directories(structure, root=''):
+    for key, value in structure.items():
+        if isinstance(value, dict):
+            create_directories(value, os.path.join(root, key))
+        else:
+            os.makedirs(os.path.join(root, value), exist_ok=True)
+
 # ---------------------------------------------------------------------
 #                            Class
 # ---------------------------------------------------------------------
@@ -140,7 +147,7 @@ class worldGenerator():
     # -----------------------------------------------------------------
     # Start up Functions: ---------------------------------------------
     # -----------------------------------------------------------------
-    def __init__(self,path):
+    def __init__(self,path,preview_mode=False,save_outputs=True):
         '''
         Inputs: 
             - path: dictionary with all environmental paths
@@ -151,10 +158,12 @@ class worldGenerator():
         self.parameters = dict()
         
         # Blender
-        self.objects    = dict()
         self.maps       = dict()
         self.kdTrees    = dict()
         self.vertices   = dict()
+        self.objects    = dict()
+        
+        self.objects['names']   = ['stem','branches','broadleafs','needles']
         
         # Scanpath
         self.scan_path  = []
@@ -166,6 +175,13 @@ class worldGenerator():
         # Factor to bypass elevation value in "flat" kd-tree
         self.parameters['kd_factor']    = 1/1000
         
+        # Preview saving etc.
+        self.parameters['preview_mode'] = preview_mode
+        self.parameters['save_outputs'] = save_outputs
+        
+        if not preview_mode:
+            self.parameters['save_outputs'] = True
+            
         # Get new scene nr
         if not any(['Output' in dir for dir in os.listdir(path['main'])]):
             os.mkdir(path['output'])
@@ -178,27 +194,18 @@ class worldGenerator():
            
         # Create folder for the scene
         self.path['scene']= f'{self.path["output"]}\\scene_nr_{str(self.parameters["scene_nr"]).zfill(4)}\\'
-        os.mkdir(self.path['scene'])
         
+        if self.parameters['save_outputs']:
+            os.mkdir(self.path['scene'])
+            
         # Create subfolders for the scene
-        self.path['scene_output'] = {'objects':{'dw':{'laying':f'{self.path["scene"]}\\objects\\dw\\laying',
-                                                      'stumps':f'{self.path["scene"]}\\objects\\dw\\stumps'},
-                                                'ground':f'{self.path["scene"]}\\objects\\ground',
-                                                'ground_veg':f'{self.path["scene"]}\\objects\\ground_veg',
-                                                'trees':f'{self.path["scene"]}\\objects\\trees',
-                                                'main':f'{self.path["scene"]}\\objects'},
+        self.path['scene_output'] = {'objects':f'{self.path["scene"]}\\objects',
                                      'pointclouds':f'{self.path["scene"]}\\pointclouds',
                                      'vertices':f'{self.path["scene"]}\\vertices',
                                      'helios':f'{self.path["scene"]}\\helios'}
 
-        def create_directories(structure, root=''):
-            for key, value in structure.items():
-                if isinstance(value, dict):
-                    create_directories(value, os.path.join(root, key))
-                else:
-                    os.makedirs(os.path.join(root, value), exist_ok=True)
-
-        create_directories(self.path['scene_output'])        
+        if self.parameters['save_outputs']:
+            create_directories(self.path['scene_output'])        
         
         # Run function to load default tree parameters
         self.get_default_tree_parameters()
@@ -464,29 +471,32 @@ class worldGenerator():
         return location, location_empty               
                
     
-    def calculate_z(self,pos,lower=0):
+    def calculate_z(self,pos,lower=0,modus='fit_plane'):
         pos = [pos[0],pos[1],0]
         
         co = np.zeros([3,3])
         for i,(coord,_,_) in enumerate(self.kdTrees['kd_flat'].find_n(pos,3)):
             co[i,:] = coord
             co[i,2] /= self.parameters['kd_factor']
+        if modus == 'fit_plane':    
+            # calculate vectors AB and AC
+            AB = co[1,:] - co[0,:]
+            AC = co[2,:] - co[0,:]
+
+            # calculate the normal vector by cross product
+            normal = np.cross(AB, AC)
             
-        # calculate vectors AB and AC
-        AB = co[1,:] - co[0,:]
-        AC = co[2,:] - co[0,:]
+            # calculate D
+            D = -np.dot(normal, co[0,:])
 
-        # calculate the normal vector by cross product
-        normal = np.cross(AB, AC)
-        
-        # calculate D
-        D = -np.dot(normal, co[0,:])
-
-        # calculate z
-        pos[2] = (-D - normal[0]*pos[0] - normal[1]*pos[1]) / normal[2]
-        
-        if pos[2] == -np.inf or pos[2] == np.inf:
-            pos[2] = co[0,2]+lower
+            # calculate z
+            pos[2] = (-D - normal[0]*pos[0] - normal[1]*pos[1]) / normal[2]
+            
+            if pos[2] == -np.inf or pos[2] == np.inf:
+                pos[2] = co[0,2]+lower
+        elif modus == 'knn':
+            co = np.nanmean(co,axis=0)
+            pos[2] = co[2]+lower
         
         return pos    
     
@@ -508,8 +518,9 @@ class worldGenerator():
         return np.unique(idx_list)
     
     def export_vertices(self):
-        with open(f'{self.path["scene_output"]["vertices"]}\\vertices_dict.py','w') as f:
-            f.write(f'vertices = {self.vertices}')
+        if self.parameters['save_outputs']:
+            with open(f'{self.path["scene_output"]["vertices"]}\\vertices_dict.py','w') as f:
+                f.write(f'vertices = {self.vertices}')
             
     def import_vertices(self):
         sys.path.insert(1,self.path['scene_output']['vertices'])
@@ -519,13 +530,12 @@ class worldGenerator():
         # Store default parameters in parameters dictionary
         self.vertices = vertices        
             
-    
     # -----------------------------------------------------------------
     # Maps and Vertices Info: -----------------------------------------
     # -----------------------------------------------------------------    
     
     # Creating Random Digital Elevation Models
-    def add_DEM(self,DEM=None,create_rnd=True,n_layer=5,std_dev=5.0,n_x=600,n_y=600,d_x=0.1,d_y=0.1,d_z=1):
+    def add_DEM(self,DEM=None,create_rnd=True,n_layer=5,std_dev=5.0,n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,boundry=0):
         
         self.parameters['noise_layers']     = n_layer
         self.parameters['start_std_noise']  = std_dev
@@ -537,7 +547,9 @@ class worldGenerator():
         self.parameters['d_z'] = d_z
         
         self.parameters['extend_x'] = n_x*d_x
-        self.parameters['extend_y'] = n_y*d_y       
+        self.parameters['extend_y'] = n_y*d_y  
+        
+        self.parameters['boundry']  = boundry     
         
         if DEM == None and create_rnd:
             # Create random noise map
@@ -573,17 +585,32 @@ class worldGenerator():
                 # Add to kd-tree
                 self.kdTrees['kd_flat'].insert([v.co.x,v.co.y,v.co.z*self.parameters['kd_factor']], idx)
                 self.kdTrees['kd_3D'].insert([v.co.x,v.co.y,v.co.z],idx)
-                self.vertices[idx] = {'idx':idx,
-                                      'img_coord':[i,j],
-                                      'blend_coord':[v.co.x,v.co.y,v.co.z],
-                                      'tree':False,
-                                      'understory_tree':False,
-                                      'dw':False,
-                                      'low_veg':False,
-                                      'rock':False,
-                                      'occupied':False,
-                                      'closed_crown':False
-                                      }  
+                if abs(v.co.x) < self.parameters['extend_x']/2-self.parameters['boundry'] or abs(v.co.y) < self.parameters['extend_y']/2-self.parameters['boundry']:
+                    self.vertices[idx] = {'idx':idx,
+                                          'img_coord':[i,j],
+                                          'blend_coord':[v.co.x,v.co.y,v.co.z],
+                                          'tree':False,
+                                          'understory_tree':False,
+                                          'dw':False,
+                                          'low_veg':False,
+                                          'rock':False,
+                                          'occupied':False,
+                                          'accessible':True,
+                                          'closed_crown':False
+                                          }
+                else:
+                    self.vertices[idx] = {'idx':idx,
+                                          'img_coord':[i,j],
+                                          'blend_coord':[v.co.x,v.co.y,v.co.z],
+                                          'tree':False,
+                                          'understory_tree':False,
+                                          'dw':False,
+                                          'low_veg':False,
+                                          'rock':False,
+                                          'occupied':True,
+                                          'accessible':True,
+                                          'closed_crown':False
+                                          }                      
                 
                 # Next one in line
                 i += 1
@@ -610,6 +637,7 @@ class worldGenerator():
                                       'low_veg':False,
                                       'rock':False,
                                       'occupied':False,
+                                      'accessible':True,
                                       'closed_crown':False
                                       }                
                 # Next one in line
@@ -627,7 +655,7 @@ class worldGenerator():
         # Store DEM Object    
         self.objects['DEM'] = DEM  
         
-        file_path = self.path['scene_output']['objects']['ground']+f'\\ground.obj'
+        file_path = self.path['scene_output']['objects']+f'\\ground.obj'
         self.helios['object_files'].append(file_path)
         
 
@@ -635,18 +663,25 @@ class worldGenerator():
         bpy.context.view_layer.objects.active = DEM
         DEM.select_set(True)
         
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )
+        if self.parameters['save_outputs']:
+            bpy.ops.export_scene.obj(
+                        filepath=file_path,
+                        use_selection=True,
+                        axis_up='Z',
+                    )
                  
                 
-    def add_CHM(self,CHM=None,create_rnd=True,n_layer=5,std_dev=5.0,n_x=600,n_y=600,max_height=35):
+    def add_CHM(self,CHM=None,create_rnd=True,n_layer=5,std_dev=5.0,max_height=35):
         if CHM != None:
             self.maps['CHM'] = CHM
         else:
-            self.maps['CHM'] = self.generate_rnd_noise_map(n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y)*max_height
+            self.maps['CHM'] = self.generate_rnd_noise_map(n_layer=n_layer,
+                                                           std_dev=std_dev,
+                                                           n_x=self.parameters['n_x'],
+                                                           n_y=self.parameters['n_y']
+                                                           )*max_height
+        
+        self.parameters['max_CHM_height'] = max_height
             
         if np.shape(self.maps['DEM']) == np.shape(self.maps['CHM']):
             i = 0
@@ -670,11 +705,15 @@ class worldGenerator():
                     # Next one in line
                     i += 1
                     
-    def add_ground_vegetation_map(self,map=None,covarage_class=4,create_rnd=True,n_layer=5,std_dev=5.0,n_x=600,n_y=600):
+    def add_ground_vegetation_map(self,map=None,covarage_class=4,create_rnd=True,n_layer=5,std_dev=5.0):
         if map != None:
             self.maps['ground_veg'] = map
         else:    
-            map = self.generate_rnd_noise_map(n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y)
+            map = self.generate_rnd_noise_map(n_layer=n_layer,
+                                              std_dev=std_dev,
+                                              n_x=self.parameters['n_x'],
+                                              n_y=self.parameters['n_y']
+                                              )
             
             if covarage_class == 1:
                 threshold = np.percentile(map[:],1)
@@ -714,7 +753,7 @@ class worldGenerator():
                     i += 1            
         
                     
-    def add_dominante_leaf_type(self,leaf_type_map=None,create_rnd=True,type_threshold=0.5,n_layer=5,std_dev=5.0,n_x=600,n_y=600,sigma=0.1):
+    def add_dominante_leaf_type(self,leaf_type_map=None,create_rnd=True,type_threshold=0.5,n_layer=5,std_dev=5.0,sigma=0.1):
         '''
         1 -> deciduous
         0 -> conifer
@@ -723,7 +762,11 @@ class worldGenerator():
         if leaf_type_map != None:
             self.maps['dominant_leaf_type'] = leaf_type_map
         else:
-            self.maps['dominant_leaf_type'] = self.generate_rnd_noise_map(n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y)
+            self.maps['dominant_leaf_type'] = self.generate_rnd_noise_map(n_layer=n_layer,
+                                                                          std_dev=std_dev,
+                                                                          n_x=self.parameters['n_x'],
+                                                                          n_y=self.parameters['n_y']
+                                                                          )
             
         if np.shape(self.maps['DEM']) == np.shape(self.maps['dominant_leaf_type']):
             i = 0
@@ -760,10 +803,7 @@ class worldGenerator():
     # -----------------------------------------------------------------  
 
     # Planting broad leafed plant
-    def spawnBroadLeafedPlant(self,objpath,n_sets=10,set_size=25,scaling=1.5,remove_after_save=True):
-        
-        self.parameters['broad_leaf_sets']      = n_sets
-        self.parameters['broad_leaf_set_size']  = set_size
+    def spawnBroadLeafedPlant(self,objpath,n_sets=10,set_size=25,scaling=1.5,remove_after_save=False):
         
         obs     = []
         rnd_arr = np.random.rand(n_sets,2)
@@ -794,37 +834,11 @@ class worldGenerator():
             if ob.type == 'MESH':
                 ob.select_set(True)
                 bpy.context.view_layer.objects.active = ob
-                
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+            ob.name = 'broad_leaf_plant'
         
-        # Get the active object
-        obj = bpy.context.active_object
+        self.objects['names'].append('broad_leaf_plant')
 
-        # Rename the mesh data
-        obj.name    = f'Broad_Leaf_Plants'
-        
-        self.objects['Broad_Leaf_Plants'] = obj
-        
-        
-        file_path = self.path['scene_output']['objects']['ground_veg']+f'\\plant.obj'
-        self.helios['object_files'].append(file_path)
-        
-
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )
-                
-        if remove_after_save:
-            bpy.data.objects.remove(obj, do_unlink=True)
-        
-    def spawnDeadWoodStemSamples(self,obj_folder,n_stems=10,remove_after_save=True):
+    def spawnDeadWoodStemSamples(self,obj_folder,n_stems=10,remove_after_save=False):
         obs = []
         df = pd.DataFrame(columns=['id', 'path', 'diameter', 'length'])
         counter = 0
@@ -860,8 +874,8 @@ class worldGenerator():
                
             # Random position
             [[x,y]]   = np.random.rand(1,2)
-            x = (x*self.parameters['extend_x']) - (self.parameters['extend_x']/2)
-            y = (y*self.parameters['extend_y']) - (self.parameters['extend_y']/2)
+            x = (x*(self.parameters['extend_x']-l)) - ((self.parameters['extend_x']-l)/2)
+            y = (y*(self.parameters['extend_y']-l)) - ((self.parameters['extend_y']-l)/2)
             
             # Find DEM elevation
             location    = self.calculate_z([x,y]) 
@@ -891,39 +905,17 @@ class worldGenerator():
             if ob.type == 'MESH':
                 ob.select_set(True)
                 bpy.context.view_layer.objects.active = ob
+                ob.name = 'laying_deadwood'
                 
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-        
-        # Get the active object
-        obj = bpy.context.active_object
-        
-        idx_list = self.get_vertices_for_obj(obj)
-        for idx in idx_list:
-            self.vertices[idx]['occupied']  = True
-            self.vertices[idx]['dw']        = True
-            self.vertices[idx]['obj_type']  = 'laying_dw'  
-            
-        # Rename the mesh data
-        obj.name    = f'Laying_Deadwood'
-        self.objects['Laying_Deadwood'] = obj
-        
-        file_path = self.path['scene_output']['objects']['dw']['laying']+f'\\laying_dw.obj'
-        self.helios['object_files'].append(file_path)
-        
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )
-        if remove_after_save:
-            bpy.data.objects.remove(obj, do_unlink=True)                
-
-    def spawnRocks(self,obj_folder,n_rocks=50,remove_after_save=True):
+                idx_list = self.get_vertices_for_obj(ob)
+                for idx in idx_list:
+                    self.vertices[idx]['occupied']  = True
+                    self.vertices[idx]['dw']        = True
+                    self.vertices[idx]['obj_type']  = 'laying_dw'  
+                    
+        self.objects['names'].append('laying_deadwood')
+                                  
+    def spawnRocks(self,obj_folder,n_rocks=50,remove_after_save=False):
         obs = []
         df = pd.DataFrame(columns=['id', 'path'])
         counter = 0
@@ -947,13 +939,13 @@ class worldGenerator():
                      
             # Random position
             [[x,y]]   = np.random.rand(1,2)
-            x = (x*self.parameters['extend_x']) - (self.parameters['extend_x']/2)
-            y = (y*self.parameters['extend_y']) - (self.parameters['extend_y']/2)
+            x = (x*(self.parameters['extend_x']-2)) - ((self.parameters['extend_x']-2)/2)
+            y = (y*(self.parameters['extend_y']-2)) - ((self.parameters['extend_y']-2)/2)
             
             # Find DEM elevation
             location            = self.calculate_z([x,y])
-            rotation            = self.check_possible_targets(location,alpha,0.2)
-            _,a,_               = self.check_possible_targets(location,beta,0.2)
+            rotation            = self.check_possible_targets(location,alpha,0.5)
+            _,a,_               = self.check_possible_targets(location,beta,0.5)
             rotation            = (a,rotation[1],rotation[2])
             
             # Import the object with the given location and rotation
@@ -969,40 +961,17 @@ class worldGenerator():
             if ob.type == 'MESH':
                 ob.select_set(True)
                 bpy.context.view_layer.objects.active = ob
-        
-        
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
+                ob.name = 'rock'
                 
-        # Get the active object
-        obj = bpy.context.active_object
-
-        idx_list = self.get_vertices_for_obj(obj)
-        for idx in idx_list:
-            self.vertices[idx]['occupied']  = True
-            self.vertices[idx]['rock']      = True
-            self.vertices[idx]['obj_type']  = 'rock'       
-
-        # Rename the mesh data
-        obj.name    = f'Rocks'
-        self.objects['Rocks'] = obj   
-
-        file_path = self.path['scene_output']['objects']['ground']+f'\\rocks.obj'
-        self.helios['object_files'].append(file_path)
-        
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )   
-        if remove_after_save:
-            bpy.data.objects.remove(obj, do_unlink=True)
+                idx_list = self.get_vertices_for_obj(ob)
+                for idx in idx_list:
+                    self.vertices[idx]['occupied']  = True
+                    self.vertices[idx]['rock']      = True
+                    self.vertices[idx]['obj_type']  = 'rock'  
+                    
+        self.objects['names'].append('rock')       
             
-    def spawnStumps(self,obj_folder,n_stumps=2,radius=1,lower_factor=1/3,elevate_factor=1/2,remove_after_save=True):
+    def spawnStumps(self,obj_folder,n_stumps=2,radius=1,lower_factor=1/3,elevate_factor=1/2,remove_after_save=False):
         obs = []
         df = pd.DataFrame(columns=['id', 'path'])
         counter = 0
@@ -1027,7 +996,7 @@ class worldGenerator():
             
             # Find DEM elevation
             location                    = self.calculate_z([x,y])            
-            location,location_empty     = self.get_stretch_locations(location,radius=radius,
+            location,location_empty     = self.get_stretch_locations(np.array(location)-[0,0,0.2],radius=radius,
                                                                      lower_factor=lower_factor,
                                                                      elevate_factor=elevate_factor)
             
@@ -1085,32 +1054,9 @@ class worldGenerator():
             if ob.type == 'MESH':
                 ob.select_set(True)
                 bpy.context.view_layer.objects.active = ob
-                
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-
-        # Get the active object
-        obj = bpy.context.active_object
-
-        # Rename the mesh data
-        obj.name    = f'Stumps'
-        self.objects['Stumps'] = obj  
-
-        file_path = self.path['scene_output']['objects']['dw']['stumps']+f'\\stumps_dw.obj'
-        self.helios['object_files'].append(file_path)
+                ob.name = 'stump'
+        self.objects['names'].append('stump')
         
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-        
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )
-        if remove_after_save:
-            bpy.data.objects.remove(obj, do_unlink=True)
-    
     def seed_rnd_trees(self,n_trees):
         # get uniform rnd nr of vertices positions to plant tree
         idx_list        = np.random.randint(len(self.vertices),size=n_trees)
@@ -1125,8 +1071,10 @@ class worldGenerator():
                 self.vertices[idx]['tree']      = True
                 self.vertices[idx]['occupied']  = False
                 
+                
                 for (_,n_idx,_) in self.kdTrees['kd_3D'].find_range(self.vertices[idx]['blend_coord'],radius=self.vertices[idx]['canopy_height']*0.03):
                     self.vertices[n_idx]['occupied']    = True
+                    self.vertices[n_idx]['accessible']  = False
                     self.vertices[n_idx]['obj_type']    = 'tree'
                     
                 self.tree_seeds.append(self.vertices[idx])
@@ -1152,7 +1100,7 @@ class worldGenerator():
             else:
                 seed['closed_crown']    = False
                 
-    def grow_trees(self,showLeaves=False,vFactor=0.1,decimate=0.0872665,join_species=True,save_objects=True,remove_after_save=True):
+    def grow_trees(self,showLeaves=True,vFactor=0.1,decimate=0.0872665,join_species=True,remove_after_save=False):
         def r(n, r0=0.2, rinf=0.1, k=0.5):
             if rinf < r0:
                 return rinf+((r0-rinf)*np.exp(-k*n))
@@ -1195,7 +1143,7 @@ class worldGenerator():
             seed['tree_parameters']['scaleV']  = seed['tree_parameters']['scale']*vFactor
             
             # Amount of subbranches based on size
-            seed['tree_parameters']['levels']  = 5 if seed['tree_parameters']['scale'] > 30 else 4 if seed['tree_parameters']['scale'] > 20 else 3 if seed['tree_parameters']['scale'] > 10 else 2
+            seed['tree_parameters']['levels']  = 5 if seed['tree_parameters']['scale'] > 35 else 4 if seed['tree_parameters']['scale'] > 20 else 3 if seed['tree_parameters']['scale'] > 10 else 2
             
             # Total Amount of branch rings
             seed['tree_parameters']['nrings'] = int(seed['tree_parameters']['scale']*2)
@@ -1245,107 +1193,61 @@ class worldGenerator():
             seed['tree_parameters']['showLeaves'] = showLeaves
                         
             bpy.ops.curve.tree_add(**seed['tree_parameters'])
+            
+            ## Leaves
+            if seed['tree_parameters']['showLeaves']:
+                # Deselect all points in the curve
+                bpy.ops.object.select_all(action='DESELECT')
+
+                # Select in data
+                leaves = bpy.data.objects['leaves']
+
+                if seed['tree_parameters']['leafShape'] != 'rect':
+                    leaves.name = 'broadleafs'
+                else:
+                    leaves.name = 'needles'
+
+                # Select the curve object and make it the active object
+                leaves.select_set(True)
+                bpy.context.view_layer.objects.active = leaves
+
+                # Clear Parent
+                bpy.ops.object.parent_clear(type='CLEAR')
                 
-            for obj in bpy.data.objects:
-                if obj.name == 'tree':
-                    tree = obj
-                    # Rename
-                    tree.name = f'Tree_{seed["idx"]}_{seed["species"]}_{np.ceil(seed["DBH"]*100)}'
-                    
-                    # Set the tree as the active object
-                    bpy.context.view_layer.objects.active = tree
-
-                    # Make sure the tree is selected
-                    tree.select_set(True)
-
-                    # Convert the active object (the tree) to a mesh
-                    bpy.ops.object.convert(target='MESH')
-                    
-                    # Set modifier
-                    tree.modifiers.new("deci", 'DECIMATE')
-
-                    # Set the modifier properties
-                    mod                 = tree.modifiers["deci"]
-                    mod.decimate_type   = 'DISSOLVE'
-                    mod.angle_limit     = 0#.0872665 # 0.261799
-                    
-                    # Apply modifier
-                    bpy.ops.object.modifier_apply(modifier="deci")
-                    
-                    # Set location
-                    tree.location   = seed['blend_coord']   
-
-        if showLeaves:
-            # get the list of empties that have children
-            trees_with_leaves = [t for t in bpy.data.objects if t.type == 'MESH' and t.children]
-
-            # we need to deselect everything first
+                leaves.location   = seed['blend_coord'] 
+                
+            ## Stem & Branches & Twigs
+            # Deselect all points in the curve
             bpy.ops.object.select_all(action='DESELECT')
 
-            for tree in trees_with_leaves:
-                tree.select_set(True)
-                for obj in tree.children:
-                    obj.select_set(True)
-                bpy.context.view_layer.objects.active = tree
-                bpy.ops.object.join()
+            # Select in data
+            tree = bpy.data.objects['tree']
 
-                # deselect everything before the next iteration
-                bpy.ops.object.select_all(action='DESELECT')
-        
-        
-        # Join objects
-        if join_species:
-            trees           = [tree for tree in bpy.data.objects if 'Tree' in tree.name]
-            species_names   = ['_'.join(ob.name.split('_')[2:-1]) for ob in trees if len('_'.join(ob.name.split('_')[2:-1])) > 0]
-            species_list    = dict()
+            tree.name       = 'temporary'
+            tree.location   = seed['blend_coord'] 
+
+            # Select the curve object and make it the active object
+            tree.select_set(True)
+            bpy.context.view_layer.objects.active = tree
+
+            # Go into edit mode
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Deselect all points in the curve
+            bpy.ops.curve.select_all(action='DESELECT')
+            for stem in range(seed['tree_parameters']['baseSplits']+1):
+                for point in tree.data.splines[stem].bezier_points:
+                    point.select_control_point = True
+
+            # Separate the selected points into a new object
+            bpy.ops.curve.separate()
+
+            # Go back to object mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            bpy.data.objects['temporary'].name      = 'branches'
+            bpy.data.objects['temporary.001'].name  = 'stem'
             
-            for species in species_names:
-                species_list[species] = []
-                
-            for tree in trees:
-                for species in species_names:
-                    if species in tree.name:
-                        species_list[species].append(tree)
-            
-            for species in species_names:
-                try:
-                    bpy.ops.object.select_all(action='DESELECT')
-                    for tree in species_list[species]:
-                        tree.select_set(True)
-                        bpy.context.view_layer.objects.active = tree
-                            
-                    bpy.ops.object.join()
-                    bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-                    
-                    
-                    # Get the active object
-                    obj         = bpy.context.selected_objects[0]
-                    obj.name    = species
-                    
-                    # Store the object
-                    self.objects[species]   = obj
-
-
-                    
-                    if save_objects:
-                            
-                        bpy.ops.object.select_all(action='DESELECT')
-                        bpy.context.view_layer.objects.active = obj
-                        obj.select_set(True)
-                        
-                        file_path = self.path['scene_output']['objects']['trees']+f'\\{species}.obj'
-                        self.helios['object_files'].append(file_path)  
-                                              
-                        bpy.ops.export_scene.obj(
-                                    filepath=file_path,
-                                    use_selection=True,
-                                    axis_up='Z',
-                                )
-                        if remove_after_save:
-                            bpy.data.objects.remove(obj, do_unlink=True)                    
-                except:
-                    print('Error Occured but we will continue anyway!')
-
     def seed_understory_trees(self,distance=5,n_trees=3):
         self.understory_seeds = []
         for seed in self.tree_seeds:
@@ -1367,12 +1269,13 @@ class worldGenerator():
                         
                         for (_,n_idx,_) in self.kdTrees['kd_3D'].find_range(self.vertices[idx_list[i]]['blend_coord'],radius=0.25):
                             self.vertices[n_idx]['occupied']        = True
+                            self.vertices[n_idx]['accessible']      = False
                             self.vertices[n_idx]['understory_tree'] = True
                             self.vertices[n_idx]['obj_type']        = 'understory_tree'                 
                         
                         self.understory_seeds.append(self.vertices[idx_list[i]])
                           
-    def grow_understory_trees(self,showLeaves=False,vFactor=0.1,decimate=0.0872665,join_species=True,save_objects=True,remove_after_save=True):        
+    def grow_understory_trees(self,showLeaves=True,vFactor=0.1,decimate=0.0872665,join_species=True,remove_after_save=False):        
         # Running through all seed vertices
         for seed in self.understory_seeds:
             # Checking for the dominate leaf type
@@ -1425,106 +1328,62 @@ class worldGenerator():
             seed['tree_parameters']['showLeaves'] = showLeaves
                         
             bpy.ops.curve.tree_add(**seed['tree_parameters'])
+            
+            ## Leaves
+            if seed['tree_parameters']['showLeaves']:
+                # Deselect all points in the curve
+                bpy.ops.object.select_all(action='DESELECT')
+
+                # Select in data
+                leaves = bpy.data.objects['leaves']
+
+                if seed['tree_parameters']['leafShape'] != 'rect':
+                    leaves.name = 'broadleafs'
+                else:
+                    leaves.name = 'needles'
+
+                # Select the curve object and make it the active object
+                leaves.select_set(True)
+                bpy.context.view_layer.objects.active = leaves
+
+                # Clear Parent
+                bpy.ops.object.parent_clear(type='CLEAR')
                 
-            for obj in bpy.data.objects:
-                if obj.name == 'tree':
-                    tree = obj
-                    # Rename
-                    tree.name = f'Understory_Tree_{seed["idx"]}_{seed["species"]}_{np.ceil(seed["DBH"]*100)}'
-                    
-                    # Set the tree as the active object
-                    bpy.context.view_layer.objects.active = tree
-
-                    # Make sure the tree is selected
-                    tree.select_set(True)
-
-                    # Convert the active object (the tree) to a mesh
-                    bpy.ops.object.convert(target='MESH')
-                    
-                    # Set modifier
-                    tree.modifiers.new("deci", 'DECIMATE')
-
-                    # Set the modifier properties
-                    mod                 = tree.modifiers["deci"]
-                    mod.decimate_type   = 'DISSOLVE'
-                    mod.angle_limit     = 0.0872665 # 0.261799
-                    
-                    # Apply modifier
-                    bpy.ops.object.modifier_apply(modifier="deci")
-                    
-                    # Set location
-                    tree.location   = seed['blend_coord']   
-
-        if showLeaves:
-            # get the list of empties that have children
-            trees_with_leaves = [t for t in bpy.data.objects if t.type == 'MESH' and t.children]
-
-            # we need to deselect everything first
+                leaves.location   = seed['blend_coord'] 
+                
+            ## Stem & Branches & Twigs
+            # Deselect all points in the curve
             bpy.ops.object.select_all(action='DESELECT')
 
-            for tree in trees_with_leaves:
-                tree.select_set(True)
-                for obj in tree.children:
-                    obj.select_set(True)
-                bpy.context.view_layer.objects.active = tree
-                bpy.ops.object.join()
+            # Select in data
+            tree = bpy.data.objects['tree']
 
-                # deselect everything before the next iteration
-                bpy.ops.object.select_all(action='DESELECT')
-        
-        
-        # Join objects
-        if join_species:
-            trees           = [tree for tree in bpy.data.objects if 'Understory_Tree' in tree.name]
-            species_names   = ['_'.join(ob.name.split('_')[3:-1]) for ob in trees if len('_'.join(ob.name.split('_')[3:-1]))>0]
-            species_list    = dict()
-            
-            for species in species_names:
-                species_list[species] = []
-                
-            for tree in trees:
-                for species in species_names:
-                    if species in tree.name:
-                        species_list[species].append(tree)
-            
-            for species in species_names:
-                try:
-                    bpy.ops.object.select_all(action='DESELECT')
-                    for tree in species_list[species]:
-                        tree.select_set(True)
-                        bpy.context.view_layer.objects.active = tree
-                            
-                    bpy.ops.object.join()
-                    bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-                    
-                    
-                    # Get the active object
-                    obj         = bpy.context.selected_objects[0]
-                    obj.name    = f'understory_{species}'
-                    
-                    # Store the object
-                    self.objects[species]   = obj
-                    
-                    if save_objects:
-                            
-                        bpy.ops.object.select_all(action='DESELECT')
-                        bpy.context.view_layer.objects.active = obj
-                        obj.select_set(True)
-                        
-                        file_path = self.path['scene_output']['objects']['trees']+f'\\understory_{species}.obj'
-                        self.helios['object_files'].append(file_path)  
-                                              
-                        bpy.ops.export_scene.obj(
-                                    filepath=file_path,
-                                    use_selection=True,
-                                    axis_up='Z',
-                                )
-                        if remove_after_save:
-                            bpy.data.objects.remove(obj, do_unlink=True)                   
-                except:
-                    print('Error Occured but we will continue anyway!')
+            tree.name       = 'temporary'
+            tree.location   = seed['blend_coord'] 
 
-    def spawn_undergrowth_sapling_sets(self,n_sets=10,set_size=25,size=3,dist=5,remove_after_save=True,showLeaves=False):
+            # Select the curve object and make it the active object
+            tree.select_set(True)
+            bpy.context.view_layer.objects.active = tree
+
+            # Go into edit mode
+            bpy.ops.object.mode_set(mode='EDIT')
+
+            # Deselect all points in the curve
+            bpy.ops.curve.select_all(action='DESELECT')
+            for stem in range(seed['tree_parameters']['baseSplits']+1):
+                for point in tree.data.splines[stem].bezier_points:
+                    point.select_control_point = True
+
+            # Separate the selected points into a new object
+            bpy.ops.curve.separate()
+
+            # Go back to object mode
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            bpy.data.objects['temporary'].name      = 'branches'
+            bpy.data.objects['temporary.001'].name  = 'stem'  
+        
+    def spawn_undergrowth_sapling_sets(self,n_sets=15,set_size=25,size=4,dist=5,remove_after_save=False,showLeaves=True):
         def plant_sapling(size=2, sizeV=0.5, stem=1, stemV=0.1, bevel=True, showLeaves=True, seed=0, curveRes=(10, 8, 3, 1), curve=(0, 30, 25, 0), curveV=(10, 10, 25, 0), curveBack=(0, 0, 0, 0), rootFlare=1.15, ratio=0.02, minRadius=0.002, baseSplits=2, segSplits=(0.35, 0.35, 0.35, 0), splitByLen=True, rMode='rotate', splitStraight=0, splitLength=0, splitAngle=(20, 36, 32, 0), splitAngleV=(2, 2, 0, 0), splitHeight=0.5, splitBias=0, baseSize=0.35, baseSize_s=0.8, branchDist=1.5, nrings=-1, levels=2, branches=(0, 20, 10, 5), length=(1, 0.33, 0.375, 0.45), lengthV=(0.05, 0.2, 0.35, 0), attractUp=(0, -1, -0.65, 0), attractOut=(0, 0.2, 0.25, 0), shape='8', shapeS='7', customShape=(1, 1, 0.5, 1), downAngle=(90, 60, 50, 45), downAngleV=(0, 25, 30, 10), useOldDownAngle=False, useParentAngle=True, rotate=(99.5, 137.5, 137.5, 137.5), rotateV=(0, 0, 0, 0), leaves=16, leafType='0', leafDownAngle=45, leafDownAngleV=10, leafRotate=137.5, leafRotateV=0, leafObjZ='+2', leafObjY='+1', leafScale=0.2, leafScaleX=0.5, leafScaleT=0.2, leafScaleV=0.25, leafShape='hex', leafangle=-45, leafDist='6', leafBaseSize=0.2, closeTip=True, noTip=False, autoTaper=True, taper=(1, 1, 1, 1), radiusTweak=(1, 1, 1, 1), ratioPower=1, attachment='0'):
             tree = bpy.ops.curve.tree_add(
                                         # General Props
@@ -1603,12 +1462,6 @@ class worldGenerator():
                                         ratioPower=ratioPower,
                                         attachment=attachment
                                     )
-            for obj in bpy.data.objects:
-                if obj.name == 'tree':
-                    obj.name = 't'
-                    tree = obj
-                    
-            return tree
 
         def r(n, r0=0.2, rinf=0.1, k=0.5):
             if rinf < r0:
@@ -1641,10 +1494,11 @@ class worldGenerator():
                         shape       = (1, 1, 0.5, 1)
                         leaves      = 16 
                         branches    = (0,20,10,0)
+                        baseSplits  = np.random.randint(1,5)
                         tree    = plant_sapling(size=s,
                                                 seed=np.random.randint(1000),
                                                 showLeaves=showLeaves,
-                                                baseSplits=np.random.randint(1,5),
+                                                baseSplits=baseSplits,
                                                 customShape=(r(d,shape[0]/3,shape[0],k=0.75),
                                                              r(d,shape[1]/3,shape[1],k=0.75),
                                                              r(d,shape[2],shape[2]/2,k=0.75),
@@ -1656,91 +1510,79 @@ class worldGenerator():
                                                             branches[3]) 
                                                 )
                         
-                        tree.location           = location
+                        ## Leaves
+                        if showLeaves:
+                            # Deselect all points in the curve
+                            bpy.ops.object.select_all(action='DESELECT')
 
-        test = False
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in bpy.data.objects:
-            if 'leaves' in obj.name:
-                test    = True
-                leaves  = obj
-                
-                # Rename
-                leaves.name = f'L'
-                
-                # Set the tree as the active object
-                bpy.context.view_layer.objects.active = leaves
+                            # Select in data
+                            leaves = bpy.data.objects['leaves']
 
-                # Make sure the tree is selected
-                leaves.select_set(True)
+                            leaves.name = 'broadleafs'
 
-        if test:
-            leaves.name = 'leaves'        
-            bpy.context.view_layer.objects.active = leaves
-            bpy.ops.object.join()
-            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-            
+                            # Select the curve object and make it the active object
+                            leaves.select_set(True)
+                            bpy.context.view_layer.objects.active = leaves
+
+                            # Clear Parent
+                            bpy.ops.object.parent_clear(type='CLEAR')
+                            
+                            leaves.location   = location
+                            
+                        ## Stem & Branches & Twigs
+                        # Deselect all points in the curve
+                        bpy.ops.object.select_all(action='DESELECT')
+
+                        # Select in data
+                        tree = bpy.data.objects['tree']
+
+                        tree.name       = 'temporary'
+                        tree.location   = location
+
+                        # Select the curve object and make it the active object
+                        tree.select_set(True)
+                        bpy.context.view_layer.objects.active = tree
+
+                        # Go into edit mode
+                        bpy.ops.object.mode_set(mode='EDIT')
+
+                        # Deselect all points in the curve
+                        bpy.ops.curve.select_all(action='DESELECT')
+                        for stem in range(baseSplits+1):
+                            for point in tree.data.splines[stem].bezier_points:
+                                point.select_control_point = True
+
+                        # Separate the selected points into a new object
+                        bpy.ops.curve.separate()
+
+                        # Go back to object mode
+                        bpy.ops.object.mode_set(mode='OBJECT')
+
+                        bpy.data.objects['temporary'].name      = 'branches'
+                        bpy.data.objects['temporary.001'].name  = 'stem'
+
+    def combine_objects(self,remove_after_save=False):
+        for obj_name in self.objects['names']:
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.view_layer.objects.active = leaves
-            leaves.select_set(True)
-            
-            file_path = self.path['scene_output']['objects']['trees']+f'\\undergrowth_leaves.obj'
-            self.helios['object_files'].append(file_path)  
-                                  
-            bpy.ops.export_scene.obj(
-                        filepath=file_path,
-                        use_selection=True,
-                        axis_up='Z',
-                    )
-            if remove_after_save:
-                bpy.data.objects.remove(leaves, do_unlink=True)
-
-
-        bpy.ops.object.select_all(action='DESELECT')
-        for obj in bpy.data.objects:
-            if 't' in obj.name:
-                tree = obj
-                
-                # Set the tree as the active object
-                bpy.context.view_layer.objects.active = tree
-
-                # Make sure the tree is selected
-                tree.select_set(True)
-
-                # Convert the active object (the tree) to a mesh
-                bpy.ops.object.convert(target='MESH')
-                
-                # Set modifier
-                tree.modifiers.new("deci", 'DECIMATE')
-
-                # Set the modifier properties
-                mod                 = tree.modifiers["deci"]
-                mod.decimate_type   = 'DISSOLVE'
-                mod.angle_limit     = 0.0872665 # 0.261799
-                
-                # Apply modifier
-                bpy.ops.object.modifier_apply(modifier="deci")
-                
-        tree.name = 'undergrowth'        
-        bpy.context.view_layer.objects.active = tree
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-            
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = tree
-        tree.select_set(True)
+            for obj in bpy.data.objects:
+                if obj_name in obj.name:
+                    ob = obj
+                    bpy.context.view_layer.objects.active = ob
+                    ob.select_set(True)
+            bpy.ops.object.join()
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')            
+            ob.name = obj_name
         
-        file_path = self.path['scene_output']['objects']['trees']+f'\\undergrowth_sapling.obj'
-        self.helios['object_files'].append(file_path)  
-                              
-        bpy.ops.export_scene.obj(
-                    filepath=file_path,
-                    use_selection=True,
-                    axis_up='Z',
-                )
-        if remove_after_save:
-            bpy.data.objects.remove(tree, do_unlink=True)
-
+            file_path = f'{self.path["scene_output"]["objects"]}\\{ob.name}.obj'
+            self.helios['object_files'].append(file_path)  
+            if self.parameters['save_outputs']:                      
+                bpy.ops.export_scene.obj(
+                            filepath=file_path,
+                            use_selection=True,
+                            axis_up='Z',
+                        )
+                if remove_after_save:
+                    bpy.data.objects.remove(ob, do_unlink=True)
                 
     # -----------------------------------------------------------------
     # Scanning: -------------------------------------------------------
@@ -1770,7 +1612,7 @@ class worldGenerator():
         # Get the vertices you want to delete. This example deletes the first vertex.
         verts_to_delete = []
         for i,key in enumerate(self.vertices.keys()):
-            if self.vertices[key]['occupied']:
+            if not self.vertices[key]['accessible']:
                 verts_to_delete.append(bm.verts[i])
 
         # Delete the vertices
@@ -2088,10 +1930,10 @@ class worldGenerator():
                        cwd=self.helios['path'])
 
         #self.combine_Helios_legs()
-    def label_converter(self,l,combined_classes=[{'label':1,'keywords':['ground','rocks']},
-                                                 {'label':2,'keywords':['plant','leaves','leaf','sapling']},
-                                                 {'label':3,'keywords':['dw']},
-                                                 {'label':4,'keywords':['birch','pine','maple']}]):
+    def label_converter(self,l,combined_classes=[{'label':1,'keywords':['ground','rock']},
+                                                 {'label':2,'keywords':['plant','leaves','branches','needles','leaf','sapling']},
+                                                 {'label':3,'keywords':['dw','stump']},
+                                                 {'label':4,'keywords':['birch','pine','maple','stem']}]):
         cla = -1                                         
         for classes in combined_classes:
             if any([keyword in self.object_labels[l] for keyword in classes['keywords']]):
@@ -2101,7 +1943,7 @@ class worldGenerator():
 
 
 
-    def combine_Helios_legs(self,removeLegs=True,split4training=True,center=(0,0),extend=(25,25)):
+    def combine_Helios_legs(self,removeLegs=True,save_combined=True,create_chunks=True,chunk_size=[5,5,2],center=(0,0),extend=(25,25),max_height=2):
         def deleteSubfolderAndFiles(folderPath):
             for entry in os.listdir(folderPath):
                 if os.path.isdir(os.path.join(folderPath,entry)):
@@ -2110,10 +1952,17 @@ class worldGenerator():
                 else:
                     os.remove(os.path.join(folderPath,entry))
         
+        if create_chunks:
+            chunk_dict = dict()
+            
+        if save_combined:
+            combined = []
+        
         self.helios['helios_output_dir'] = self.path['scene_output']['pointclouds']
-
+        
         folders = [os.path.join(f'{self.helios["path"]}output', entry) for entry in os.listdir(f'{self.helios["path"]}output')
                    if os.path.isdir(os.path.join(f'{self.helios["path"]}output', entry))]
+                   
         for folder in folders:
             if str(self.parameters["scene_nr"]).zfill(4) in folder:
                 subFolders  = [os.path.join(f'{folder}', entry) for entry in os.listdir(f'{folder}')
@@ -2121,61 +1970,79 @@ class worldGenerator():
                 for subFolder in subFolders:
                     xyzFiles    = [os.path.join(f'{subFolder}', file) for file in os.listdir(subFolder) if file.endswith('.xyz')]
                     for xyzFile in xyzFiles:
-                        with open(xyzFile,'r') as f:
-                            if split4training:
-                                with open(f'{self.helios["helios_output_dir"]}/{self.helios["scene_name"]}_train.xyz' , "a") as t:
-                                    with open(f'{self.helios["helios_output_dir"]}/{self.helios["scene_name"]}_val.xyz' , "a") as v:
-                                        with open(f'{self.helios["helios_output_dir"]}/{self.helios["scene_name"]}_test.xyz' , "a") as te:
-                                            for line in f:
-                                                x,y,z,_,_,_,_,_,label,_,_ = line.split()
-                                                if int(label) == 0:
-                                                    label = int(1)
-                                                elif int(label) == 1:
-                                                    label = int(2)
-                                                elif int(label) == 4:
-                                                    label = int(3)
-                                                else:
-                                                    label = int(4)
+                        with open(xyzFile,'r') as f:   
+                            l = line.split(' ')
+                            
+                            x_glob      = float(l[0])                         
+                            y_glob      = float(l[1])      
+                            z_glob      = float(l[2])
+                            label       = int(l[8])
+            
+                            [_,_,z_dem] = self.calculate_z([y_glob,-x_glob])
+                            z_norm      = np.round(z_glob-z_dem,6)
+                            
+                            label       = int(l[8])                            
+                            point2tree  = self.label_converter(label)  
+                               
+                            
+                                         
+                            if create_chunks:  
+                                x_chunk     = int(np.floor(x_glob/chunk_size[1]))
+                                y_chunk     = int(np.floor(y_glob/chunk_size[0]))
+                                
+                                x_loc       = np.round(x_glob%chunk_size[0],6)
+                                y_loc       = np.round(y_glob%chunk_size[1],6)
+                                
+                                z_norm      = np.round(z_glob-z_ground,6)                                                                    
+                                if z_norm <= chunk_size[2]:
+                                    chunk_name = f'chunk_{x_chunk}_{y_chunk}'
+                                    
+                                    if chunk_name not in chunk_dict.keys():
+                                        chunk_dict[chunk_name] = []
+                                    
+                                    chunk_dict[chunk_name].append(f'{x_loc} {y_loc} {z_norm} {point2tree}\n')   
+                                    
+                            if save_combined:
+                                combined.append(f'{x_glob} {y_glob} {z_glob} {z_norm} {point2tree} {label}')
+                 
+   
+            if removeLegs:
+                deleteSubfolderAndFiles(folder)    
 
-                                                if float(x) < center[0]:
-                                                    if float(x) >= center[0]-extend[0] and center[1]-extend[1] <= float(y) <= center[1]+extend[1]:
-                                                        t.write(f'{x} {y} {z} {label}\n')
-                                                elif float(y) < center[1]:
-                                                    if float(x) <= center[0]+extend[0] and float(y) >= center[1]-extend[1]:
-                                                        v.write(f'{x} {y} {z} {label}\n')
-                                                elif float(y) >= center[1]:
-                                                    if float(x) <= center[0]+extend[0] and float(y) <= center[1]+extend[1]:
-                                                        te.write(f'{x} {y} {z} {label}\n')
-                            else:
-                                with open(f'{self.helios["helios_output_dir"]}/{self.helios["scene_name"]}.xyz' , "a") as w:
-                                    for line in f: 
-                                        l = line.split(' ')
-                                        if len(l) > 1:
-                                            label = self.label_converter(int(l[8]))
-                                            w.write(f"{l[0]} {l[1]} {l[2]} {label}\n")
-
-                if removeLegs:
-                    deleteSubfolderAndFiles(folder)    
+        if save_combined:
+            with open(f'{self.helios["helios_output_dir"]}/combined.xyz','a') as c:
+                c.writelines(combined)
+        
+        if create_chunks:
+            os.mkdir(f'{self.helios["helios_output_dir"]}/chunks/')
+            for chunk in chunk_dict.keys():
+                
+                np.save(f'{self.helios["helios_output_dir"]}/chunks/{chunk}.npy',np.array([line.rstrip().split(' ') for line in chunk_dict[chunk]]).astype(float)) 
+                
+                '''
+                with open(f'{self.helios["helios_output_dir"]}/chunks/{chunk}.xyz','a') as c:
+                    c.writelines(chunk_dict[chunk])
+                '''       
                                             
     # -----------------------------------------------------------------
     # Pipelines: ------------------------------------------------------
     # -----------------------------------------------------------------                         
 
-    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,n_x=600,n_y=600,d_x=0.1,d_y=0.1,d_z=1,max_height=35,create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
+    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,max_height=35,boundry=0,create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
         # Adding plot information
         print(f'Start Scene Nr {self.parameters["scene_nr"]}')
         print('')
         print('Add DEM')
         
-        self.add_DEM(DEM=DEM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y,d_x=d_x,d_y=d_y,d_z=d_z)
+        self.add_DEM(DEM=DEM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y,d_x=d_x,d_y=d_y,d_z=d_z,boundry=boundry)
         print('finished')
         print('')
         print('Add CHM')
-        self.add_CHM(CHM=CHM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y,max_height=max_height)
+        self.add_CHM(CHM=CHM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,max_height=max_height)
         print('finished')
         print('')
         print('Add Dominante Leaf Type')
-        self.add_dominante_leaf_type(leaf_type_map=leaf_type_map,type_threshold=type_threshold,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y)
+        self.add_dominante_leaf_type(leaf_type_map=leaf_type_map,type_threshold=type_threshold,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev)
         print('finished')
         print('')
         print('Add Ground Vegetation')
@@ -2222,13 +2089,16 @@ class worldGenerator():
         print('Spawn Undergrowth')
         self.spawn_undergrowth_sapling_sets(n_sets=20,set_size=50,size=3,dist=5)
         print('finished/n')
+        
+        # Combine individual objects
+        self.combine_objects()
          
         # Export vertices
         print('Export Vertices')
         self.export_vertices()
         print('finished/n')
         
-    def simulate_walk(self,coords=[[0,0],[-25,-25],[25,-25],[25,-12.5],[-25,-12.5],[-25,0],[25,0],[25,12.5],[-25,12.5],[-25,25],[25,25],[0,0]]):
+    def simulate_walk(self,coords=[[0,0],[-1,-1],[1,-1],[1,-0.5],[-1,-0.5],[-1,0],[1,0],[1,0.5],[-1,0.5],[-1,1],[1,1],[0,0]],distance_factor=25):
         print('Create Path DEM')
         self.create_path_DEM()
         print('finished/n')
@@ -2238,26 +2108,34 @@ class worldGenerator():
         print('Get Shortest Paths')
         
         for i in range(len(coords)-1):
-            self.get_path(start_loc=coords[i],end_loc=coords[i+1])
+            self.get_path(start_loc=np.array(coords[i])*distance_factor,
+                          end_loc=np.array(coords[i+1])*distance_factor)
             
         print('finished/n')
         print('Simulate Path')
         self.simulate_path()
         print('finished/n')
         
-    def simulate_scan(self,removeLegs=True,split4training=False,center=(0,0),extend=(30,30)):
-        print('Create Helios Legs')
-        self.create_leg_4Helios_MLS()
-        print('finished/n')
-        print('Prepare XML Files')
-        self.write_xml_4Helios()
-        print('finished/n')
-        print('Run Helios')
-        self.run_Helios()
-        print('finished/n')
-        print('Combine Legs')
-        self.combine_Helios_legs(removeLegs=removeLegs,split4training=split4training,center=center,extend=extend)
-        print('finished/n')
+    def simulate_scan(self,removeLegs=True,save_combined=True,
+                      create_chunks=True,chunk_size=[5,5,2],center=(0,0),extend=(30,30),max_height=2):
+        if not self.parameters['save_outputs']:
+            print('Simulating the scan only works after saving the outputs.\nAdd "save_objects=True" when initializing the class.')
+        else:
+            print('Create Helios Legs')
+            self.create_leg_4Helios_MLS()
+            print('finished/n')
+            print('Prepare XML Files')
+            self.write_xml_4Helios()
+            print('finished/n')
+            print('Run Helios')
+            self.run_Helios()
+            print('finished/n')
+            print('Combine Legs')
+            self.combine_Helios_legs(removeLegs=removeLegs,split4training=split4training,
+                                     center=center,extend=extend,max_height=max_height,
+                                     create_chunks=create_chunks,chunk_size=chunk_size,
+                                     save_combined=save_combined)
+            print('finished/n')
         
     def clean_scene(self):
         print('Clean all')
@@ -2294,78 +2172,35 @@ class worldGenerator():
                 pos,id,_ = self.kdTrees['kd_3D'].find(location)
                 
                 self.vertices[id]['tree'] = tree 
-    
-    def add_understory_trees(self):               
-        pass
 
-    # -----------------------------------------------------------------
-    # Not in use: -----------------------------------------------------
-    # -----------------------------------------------------------------  
-
-    # Distributing deadwood
-    def distDeadWood(self,objpath,n=30,l_min=2.5,l_max=10,d_min=0.2,d_max=3):
-        obs     = []
-        if type(objpath) == list:
-            pass
-            
-        elif type(objpath) == str:
-            for _ in range(n):
-                # Random length
-                l = np.abs(np.random.normal(0,3,1))
-                if l < l_min:
-                    l = l_min
-                elif l > l_max:
-                    l = l_max
-                # Random diameter
-                d = np.abs(np.random.normal(0,0.5,1))
-                if d < d_min:
-                    d = d_min
-                elif d > d_max:
-                    d = d_max
-                # Scale
-                scale = (d,l,d)
-                
-                # Random position
-                [[x,y]]   = np.random.rand(1,2)
-                x = (x*self.parameters['extend_x']) - (self.parameters['extend_x']/2)
-                y = (y*self.parameters['extend_y']) - (self.parameters['extend_y']/2)
-                # Find DEM elevation
-                location    = self.calculate_z([x,y])
-                # Random rotation
-                alpha = np.random.uniform(-np.pi,np.pi,1)
-                
-                x_end,y_end     = calculate_xy(x,y,l,alpha)
-                location_end    = self.calculate_z([x_end,y_end])
-                
-                #a_x,a_y,a_z     = calculate_angles(location_end-location) 
-                
-                # Rotation
-                rotation        = (0,0,alpha)
-                
-                obj = import_obj(objpath, location=location, rotation=rotation, scale=scale)
-                obs.append(obj)            
-                
-        bpy.ops.object.select_all(action='DESELECT')
-        for ob in obs:
-            if ob.type == 'MESH':
-                ob.select_set(True)
-                bpy.context.view_layer.objects.active = ob
-        bpy.ops.object.join()
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR', center='MEDIAN')
-        
-        # Get the active object
-        obj = bpy.context.active_object
-
-        # Rename the mesh data
-        obj.data.name = 'dw'
-        self.objects['LayingDeadwood'] = obj
  
         
 # ---------------------------------------------------------------------
 #                         Running Scripts
 # ---------------------------------------------------------------------
 scene = worldGenerator(path)
-scene.map_based_pipeline(DEM=None,CHM=None,leaf_type_map=None,n_trees=75,n_rocks=10,n_stumps=10,n_laying_dw=150,n_plants=50,showLeaves=False,type_threshold=0.5,n_x=550,n_y=550,d_x=0.1,d_y=0.1,d_z=15,max_height=25,create_rnd=True,n_layer=5,std_dev=5.0)
-scene.simulate_walk()
+
+scene.map_based_pipeline(DEM=None,
+                         CHM=None,
+                         leaf_type_map=None,
+                         n_trees=95,
+                         n_rocks=5,
+                         n_stumps=10,
+                         n_laying_dw=75,
+                         n_plants=150,
+                         showLeaves=True,
+                         type_threshold=0.5,
+                         n_x=600,
+                         n_y=600,
+                         d_x=0.1,
+                         d_y=0.1,
+                         d_z=15,
+                         max_height=30,
+                         boundry=2,
+                         create_rnd=True,
+                         n_layer=5,
+                         std_dev=5.0)
+                         
+scene.simulate_walk(distance_factor=25)
 scene.simulate_scan()
 
