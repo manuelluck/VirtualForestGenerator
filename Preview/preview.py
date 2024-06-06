@@ -1971,40 +1971,41 @@ class worldGenerator():
                 for subFolder in subFolders:
                     xyzFiles    = [os.path.join(f'{subFolder}', file) for file in os.listdir(subFolder) if file.endswith('.xyz')]
                     for xyzFile in xyzFiles:
-                        with open(xyzFile,'r') as f:   
-                            l = line.split(' ')
-                            
-                            x_glob      = float(l[0])                         
-                            y_glob      = float(l[1])      
-                            z_glob      = float(l[2])
-                            label       = int(l[8])
-            
-                            [_,_,z_dem] = self.calculate_z([y_glob,-x_glob])
-                            z_norm      = np.round(z_glob-z_dem,6)
-                            
-                            label       = int(l[8])                            
-                            point2tree  = self.label_converter(label)  
-                               
-                            
-                                         
-                            if create_chunks:  
-                                x_chunk     = int(np.floor(x_glob/chunk_size[1]))
-                                y_chunk     = int(np.floor(y_glob/chunk_size[0]))
+                        with open(xyzFile,'r') as f:
+                            for line in f:   
+                                l = line.split(' ')
                                 
-                                x_loc       = np.round(x_glob%chunk_size[0],6)
-                                y_loc       = np.round(y_glob%chunk_size[1],6)
+                                x_glob      = float(l[0])                         
+                                y_glob      = float(l[1])      
+                                z_glob      = float(l[2])
+                                label       = int(l[8])
+                
+                                [_,_,z_dem] = self.calculate_z([y_glob,-x_glob])
+                                z_norm      = np.round(z_glob-z_dem,6)
                                 
-                                z_norm      = np.round(z_glob-z_ground,6)                                                                    
-                                if z_norm <= chunk_size[2]:
-                                    chunk_name = f'chunk_{x_chunk}_{y_chunk}'
+                                label       = int(l[8])                            
+                                point2tree  = self.label_converter(label)  
+                                   
+                                
+                                             
+                                if create_chunks:  
+                                    x_chunk     = int(np.floor(x_glob/chunk_size[1]))
+                                    y_chunk     = int(np.floor(y_glob/chunk_size[0]))
                                     
-                                    if chunk_name not in chunk_dict.keys():
-                                        chunk_dict[chunk_name] = []
+                                    x_loc       = np.round(x_glob%chunk_size[0],6)
+                                    y_loc       = np.round(y_glob%chunk_size[1],6)
                                     
-                                    chunk_dict[chunk_name].append(f'{x_loc} {y_loc} {z_norm} {point2tree}\n')   
-                                    
-                            if save_combined:
-                                combined.append(f'{x_glob} {y_glob} {z_glob} {z_norm} {point2tree} {label}')
+                                    z_norm      = np.round(z_glob-z_ground,6)                                                                    
+                                    if z_norm <= chunk_size[2]:
+                                        chunk_name = f'chunk_{x_chunk}_{y_chunk}'
+                                        
+                                        if chunk_name not in chunk_dict.keys():
+                                            chunk_dict[chunk_name] = []
+                                        
+                                        chunk_dict[chunk_name].append(f'{x_loc} {y_loc} {z_norm} {point2tree}\n')   
+                                        
+                                if save_combined:
+                                    combined.append(f'{x_glob} {y_glob} {z_glob} {z_norm} {point2tree} {label}')
                  
    
             if removeLegs:
@@ -2189,8 +2190,8 @@ scene.map_based_pipeline(DEM=None,
                          n_plants=30,
                          showLeaves=True,
                          type_threshold=0.5,
-                         n_x=150,
-                         n_y=150,
+                         n_x=200,
+                         n_y=200,
                          d_x=0.1,
                          d_y=0.1,
                          d_z=5,
