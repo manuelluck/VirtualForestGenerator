@@ -1971,7 +1971,7 @@ class worldGenerator():
                 for subFolder in subFolders:
                     xyzFiles    = [os.path.join(f'{subFolder}', file) for file in os.listdir(subFolder) if file.endswith('.xyz')]
                     for xyzFile in xyzFiles:
-                        with open(xyzFile,'r') as f:   
+                        with open(xyzFile,'r') as f:
                             for line in f:   
                                 l = line.split(' ')
                                 
@@ -2030,7 +2030,11 @@ class worldGenerator():
     # Pipelines: ------------------------------------------------------
     # -----------------------------------------------------------------                         
 
-    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,max_height=35,boundry=0,create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
+    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,
+                           n_sets_undergrowth=20,set_size_undergrowth=50,size_undergrowth=3,dist_undergrowth=5,
+                           n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,
+                           n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,max_height=35,boundry=0,
+                           create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
         # Adding plot information
         print(f'Start Scene Nr {self.parameters["scene_nr"]}')
         print('')
@@ -2089,7 +2093,8 @@ class worldGenerator():
         self.grow_understory_trees()
         print('finished/n')
         print('Spawn Undergrowth')
-        self.spawn_undergrowth_sapling_sets(n_sets=20,set_size=50,size=3,dist=5)
+        self.spawn_undergrowth_sapling_sets(n_sets=n_sets_undergrowth,set_size=set_size_undergrowth,
+                                            size=size_undergrowth,dist=dist_undergrowth)
         print('finished/n')
         
         # Combine individual objects
@@ -2183,24 +2188,28 @@ scene = worldGenerator(path)
 scene.map_based_pipeline(DEM=None,
                          CHM=None,
                          leaf_type_map=None,
-                         n_trees=75,
+                         n_trees=90,
                          n_rocks=5,
-                         n_stumps=1,
-                         n_laying_dw=55,
-                         n_plants=150,
+                         n_stumps=10,
+                         n_laying_dw=60,
+                         n_plants=50,
+                         n_sets_undergrowth=5,
+                         set_size_undergrowth=15,
+                         size_undergrowth=3,
+                         dist_undergrowth=5,
                          showLeaves=True,
                          type_threshold=0.5,
-                         n_x=400,
-                         n_y=400,
+                         n_x=550,
+                         n_y=550,
                          d_x=0.1,
                          d_y=0.1,
                          d_z=5,
-                         max_height=25,
+                         max_height=35,
                          boundry=2,
                          create_rnd=True,
                          n_layer=5,
                          std_dev=5.0)
                          
-scene.simulate_walk(distance_factor=15)
+scene.simulate_walk(distance_factor=25)
 scene.simulate_scan()
 
