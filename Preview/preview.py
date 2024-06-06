@@ -34,12 +34,13 @@ path = dict()
 path['main']    = '\\'.join(os.path.dirname(os.path.abspath(__file__)).split('\\')[:-2])
 
 pathDict = dict()
-with open(f'{path["main"]}\\PathFile.txt') as file:
-    for line in file:
-        pathDict[line.split(',')[0]] = line.split(',')[1][:-1]
+with open(f'{path["main"]}\\PathFile.txt') as f:
+    for line in f:
+        l = line.rstrip().split(',')
+        pathDict[l[0]] = l[1]
 
 # Helios Installation
-path['helios'] = pathDict['heliosPath']
+path['helios'] = pathDict['heliosPath'] if pathDict['heliosPath'].endswith('/') or pathDict['heliosPath'].endswith('\\') else f'{pathDict["heliosPath"]}\\'
 
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
@@ -2131,10 +2132,8 @@ class worldGenerator():
             self.run_Helios()
             print('finished/n')
             print('Combine Legs')
-            self.combine_Helios_legs(removeLegs=removeLegs,split4training=split4training,
-                                     center=center,extend=extend,max_height=max_height,
-                                     create_chunks=create_chunks,chunk_size=chunk_size,
-                                     save_combined=save_combined)
+            self.combine_Helios_legs(removeLegs=removeLegs,center=center,extend=extend,max_height=max_height,
+                                     create_chunks=create_chunks,chunk_size=chunk_size,save_combined=save_combined)
             print('finished/n')
         
     def clean_scene(self):
@@ -2183,11 +2182,11 @@ scene = worldGenerator(path)
 scene.map_based_pipeline(DEM=None,
                          CHM=None,
                          leaf_type_map=None,
-                         n_trees=50,
+                         n_trees=25,
                          n_rocks=5,
-                         n_stumps=5,
-                         n_laying_dw=25,
-                         n_plants=50,
+                         n_stumps=1,
+                         n_laying_dw=15,
+                         n_plants=30,
                          showLeaves=True,
                          type_threshold=0.5,
                          n_x=150,

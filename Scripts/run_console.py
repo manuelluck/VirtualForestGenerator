@@ -34,12 +34,13 @@ path = dict()
 path['main']    = '\\'.join(os.path.dirname(os.path.abspath(__file__)).split('\\')[:-1])
 
 pathDict = dict()
-with open(f'{path["main"]}\\PathFile.txt') as file:
-    for line in file:
-        pathDict[line.split(',')[0]] = line.split(',')[1][:-1]
+with open(f'{path["main"]}\\PathFile.txt') as f:
+    for line in f:
+        l = line.rstrip().split(',')
+        pathDict[l[0]] = l[1]
 
 # Helios Installation
-path['helios'] = pathDict['heliosPath']
+path['helios'] = pathDict['heliosPath'] if pathDict['heliosPath'].endswith('/') or pathDict['heliosPath'].endswith('\\') else f'{pathDict["heliosPath"]}\\'
 
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
@@ -2131,10 +2132,8 @@ class worldGenerator():
             self.run_Helios()
             print('finished/n')
             print('Combine Legs')
-            self.combine_Helios_legs(removeLegs=removeLegs,split4training=split4training,
-                                     center=center,extend=extend,max_height=max_height,
-                                     create_chunks=create_chunks,chunk_size=chunk_size,
-                                     save_combined=save_combined)
+            self.combine_Helios_legs(removeLegs=removeLegs,center=center,extend=extend,max_height=max_height,
+                                     create_chunks=create_chunks,chunk_size=chunk_size,save_combined=save_combined)
             print('finished/n')
         
     def clean_scene(self):
@@ -2183,24 +2182,24 @@ scene = worldGenerator(path)
 scene.map_based_pipeline(DEM=None,
                          CHM=None,
                          leaf_type_map=None,
-                         n_trees=95,
+                         n_trees=75,
                          n_rocks=5,
-                         n_stumps=10,
-                         n_laying_dw=75,
+                         n_stumps=1,
+                         n_laying_dw=55,
                          n_plants=150,
                          showLeaves=True,
                          type_threshold=0.5,
-                         n_x=600,
-                         n_y=600,
+                         n_x=400,
+                         n_y=400,
                          d_x=0.1,
                          d_y=0.1,
-                         d_z=15,
-                         max_height=30,
+                         d_z=5,
+                         max_height=25,
                          boundry=2,
                          create_rnd=True,
                          n_layer=5,
                          std_dev=5.0)
                          
-scene.simulate_walk(distance_factor=25)
+scene.simulate_walk(distance_factor=15)
 scene.simulate_scan()
 
