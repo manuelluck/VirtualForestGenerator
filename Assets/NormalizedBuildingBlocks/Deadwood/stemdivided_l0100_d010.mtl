@@ -1,0 +1,22 @@
+# Blender 3.5.0 MTL File: 'None'
+# www.blender.org
+
+newmtl M_tree_stumps.013
+Ns 200.000046
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Kd D:/Unity/Projects/My project/Assets/NatureManufacture Assets/Meadow Environment Dynamic Nature/Tree Stump/Models/Textures/T_Tree_Stumps_BC.tga
+
+newmtl M_tree_stumps.014
+Ns 200.000046
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Kd D:/Unity/Projects/My project/Assets/NatureManufacture Assets/Meadow Environment Dynamic Nature/Tree Stump/Models/Textures/T_Tree_Stumps_BC.tga
