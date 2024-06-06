@@ -1995,7 +1995,7 @@ class worldGenerator():
                                     x_loc       = np.round(x_glob%chunk_size[0],6)
                                     y_loc       = np.round(y_glob%chunk_size[1],6)
                                     
-                                    z_norm      = np.round(z_glob-z_ground,6)                                                                    
+                                    z_norm      = np.round(z_glob-z_dem,6)                                                                    
                                     if z_norm <= chunk_size[2]:
                                         chunk_name = f'chunk_{x_chunk}_{y_chunk}'
                                         

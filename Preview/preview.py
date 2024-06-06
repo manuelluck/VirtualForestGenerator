@@ -1995,7 +1995,7 @@ class worldGenerator():
                                     x_loc       = np.round(x_glob%chunk_size[0],6)
                                     y_loc       = np.round(y_glob%chunk_size[1],6)
                                     
-                                    z_norm      = np.round(z_glob-z_ground,6)                                                                    
+                                    z_norm      = np.round(z_glob-z_dem,6)                                                                    
                                     if z_norm <= chunk_size[2]:
                                         chunk_name = f'chunk_{x_chunk}_{y_chunk}'
                                         
@@ -2030,7 +2030,11 @@ class worldGenerator():
     # Pipelines: ------------------------------------------------------
     # -----------------------------------------------------------------                         
 
-    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,max_height=35,boundry=0,create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
+    def map_based_pipeline(self,DEM=None,CHM=None,leaf_type_map=None,n_trees=70,n_rocks=5,n_stumps=5,
+                           n_sets_undergrowth=20,set_size_undergrowth=50,size_undergrowth=3,dist_undergrowth=5,
+                           n_laying_dw=10,n_plants=5,showLeaves=True,type_threshold=0.5,
+                           n_x=200,n_y=200,d_x=0.1,d_y=0.1,d_z=1,max_height=35,boundry=0,
+                           create_rnd=True,n_layer=5,std_dev=5.0,tree_decimate=np.pi/18):
         # Adding plot information
         print(f'Start Scene Nr {self.parameters["scene_nr"]}')
         print('')
@@ -2089,7 +2093,8 @@ class worldGenerator():
         self.grow_understory_trees()
         print('finished/n')
         print('Spawn Undergrowth')
-        self.spawn_undergrowth_sapling_sets(n_sets=20,set_size=50,size=3,dist=5)
+        self.spawn_undergrowth_sapling_sets(n_sets=n_sets_undergrowth,set_size=set_size_undergrowth,
+                                            size=size_undergrowth,dist=dist_undergrowth)
         print('finished/n')
         
         # Combine individual objects
@@ -2183,11 +2188,15 @@ scene = worldGenerator(path)
 scene.map_based_pipeline(DEM=None,
                          CHM=None,
                          leaf_type_map=None,
-                         n_trees=25,
-                         n_rocks=5,
+                         n_trees=1,
+                         n_rocks=1,
                          n_stumps=1,
-                         n_laying_dw=15,
-                         n_plants=30,
+                         n_laying_dw=1,
+                         n_plants=1,
+                         n_sets_undergrowth=1,
+                         set_size_undergrowth=15,
+                         size_undergrowth=3,
+                         dist_undergrowth=5,
                          showLeaves=True,
                          type_threshold=0.5,
                          n_x=200,
