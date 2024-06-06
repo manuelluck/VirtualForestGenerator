@@ -2078,25 +2078,25 @@ class worldGenerator():
         # Plant trees
         print('Seed Trees')
         self.seed_rnd_trees(n_trees=n_trees)
-        print('finished/n')
+        print('finished\n')
         print('Calculate Neighbourhood')
         self.get_neighbour_information()
-        print('finished/n')
+        print('finished\n')
         print('Grow Trees')
         self.grow_trees(showLeaves=showLeaves,decimate=tree_decimate)
-        print('finished/n')
+        print('finished\n')
         
         # Plant understory trees
         print('Seed Understory Trees')
         self.seed_understory_trees()
-        print('finished/n')
+        print('finished\n')
         print('Grow Understory Trees')
         self.grow_understory_trees()
-        print('finished/n')
+        print('finished\n')
         print('Spawn Undergrowth')
         self.spawn_undergrowth_sapling_sets(n_sets=n_sets_undergrowth,set_size=set_size_undergrowth,
                                             size=size_undergrowth,dist=dist_undergrowth)
-        print('finished/n')
+        print('finished\n')
         
         # Combine individual objects
         self.combine_objects()
@@ -2104,25 +2104,25 @@ class worldGenerator():
         # Export vertices
         print('Export Vertices')
         self.export_vertices()
-        print('finished/n')
+        print('finished\n')
         
     def simulate_walk(self,coords=[[0,0],[-1,-1],[1,-1],[1,-0.5],[-1,-0.5],[-1,0],[1,0],[1,0.5],[-1,0.5],[-1,1],[1,1],[0,0]],distance_factor=25):
         print('Create Path DEM')
         self.create_path_DEM()
-        print('finished/n')
+        print('finished\n')
         print('Create Path Graph')
         self.create_path_graph()
-        print('finished/n')
+        print('finished\n')
         print('Get Shortest Paths')
         
         for i in range(len(coords)-1):
             self.get_path(start_loc=np.array(coords[i])*distance_factor,
                           end_loc=np.array(coords[i+1])*distance_factor)
             
-        print('finished/n')
+        print('finished\n')
         print('Simulate Path')
         self.simulate_path()
-        print('finished/n')
+        print('finished\n')
         
     def simulate_scan(self,removeLegs=True,save_combined=True,
                       create_chunks=True,chunk_size=[5,5,2],center=(0,0),extend=(30,30),max_height=2):
@@ -2131,17 +2131,17 @@ class worldGenerator():
         else:
             print('Create Helios Legs')
             self.create_leg_4Helios_MLS()
-            print('finished/n')
+            print('finished\n')
             print('Prepare XML Files')
             self.write_xml_4Helios()
-            print('finished/n')
+            print('finished\n')
             print('Run Helios')
             self.run_Helios()
-            print('finished/n')
+            print('finished\n')
             print('Combine Legs')
             self.combine_Helios_legs(removeLegs=removeLegs,center=center,extend=extend,max_height=max_height,
                                      create_chunks=create_chunks,chunk_size=chunk_size,save_combined=save_combined)
-            print('finished/n')
+            print('finished\n')
         
     def clean_scene(self):
         print('Clean all')
