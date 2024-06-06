@@ -2013,7 +2013,8 @@ class worldGenerator():
 
         if save_combined:
             with open(f'{self.helios["helios_output_dir"]}/combined.xyz','a') as c:
-                c.writelines(combined)
+                for line in combined:
+                    c.write(line)
         
         if create_chunks:
             os.mkdir(f'{self.helios["helios_output_dir"]}/chunks/')
