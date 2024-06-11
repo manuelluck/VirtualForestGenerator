@@ -4,6 +4,7 @@
 # System
 import os
 import sys
+from datetime import datetime
 
 # Blender
 import bpy
@@ -143,6 +144,92 @@ def create_directories(structure, root=''):
 # ---------------------------------------------------------------------
 #                            Class
 # ---------------------------------------------------------------------
+class Timer:
+    def __init__(self):
+        self.time_keeper = {'overall':{'start':datetime.now()}}
+
+    def start_task(self,task):
+        self.time_keeper[task] = {'start':datetime.now()}
+
+    def stop_task(self,task):
+        if task in self.time_keeper.keys():
+            self.time_keeper[task]['stop']      = datetime.now()
+            self.time_keeper[task]['runtime']   = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+        else:
+            print('Task not started, available tasks:')
+            for key in self.time_keeper.keys():
+                print(key)
+
+    def print_task(self,task=None):
+        if task in self.time_keeper.keys():
+            if 'stop' not in self.time_keeper[task].keys():
+                self.time_keeper[task]['stop']  = datetime.now()
+
+            t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+            d = t.days
+            h, rest = divmod(t.seconds, 3600)
+            m, s = divmod(rest, 60)
+
+            self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
+
+            if d > 0:
+                self.time_keeper[task]['runtime']['days']       = d
+                self.time_keeper[task]['runtime']['hours']      = h
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif h > 0:
+                self.time_keeper[task]['runtime']['hours']      = h
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif m > 0:
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif s > 0:
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            else:
+                self.time_keeper[task]['runtime']["seconds"]    = 0
+
+            print(f'Task {task} processed in:')
+
+            for key in self.time_keeper[task]['runtime'].keys():
+                if key != 'total_seconds':
+                    print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
+        elif task is None:
+            for task in self.time_keeper.keys():
+                if 'stop' not in self.time_keeper[task].keys():
+                    self.time_keeper[task]['stop']  = datetime.now()
+
+                t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+                d = t.days
+                h, rest = divmod(t.seconds, 3600)
+                m, s = divmod(rest, 60)
+
+                self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
+
+                if d > 0:
+                    self.time_keeper[task]['runtime']['days'] = d
+                    self.time_keeper[task]['runtime']['hours'] = h
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif h > 0:
+                    self.time_keeper[task]['runtime']['hours'] = h
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif m > 0:
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif s > 0:
+                    self.time_keeper[task]['runtime']["seconds"] = s
+
+                print(f'Task {task} processed in:')
+                for key in self.time_keeper[task]['runtime'].keys():
+                    if key != 'total_seconds':
+                        print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
+        else:
+            print('Task not started, available tasks:')
+            for key in self.time_keeper.keys():
+                print(key)
+
 
 class worldGenerator():
     # -----------------------------------------------------------------
@@ -154,6 +241,9 @@ class worldGenerator():
             - path: dictionary with all environmental paths
         '''
         # Some initial dictionaries
+        # Timer
+        self.time       = Timer()
+        
         # Structural
         self.path       = path
         self.parameters = dict()
@@ -2005,7 +2095,7 @@ class worldGenerator():
                                         chunk_dict[chunk_name].append(f'{x_loc} {y_loc} {z_norm} {point2tree}\n')   
                                         
                                 if save_combined:
-                                    combined.append(f'{x_glob} {y_glob} {z_glob} {z_norm} {point2tree} {label}')
+                                    combined.append(f'{x_glob} {y_glob} {z_glob} {z_norm} {point2tree} {label}\n')
                  
    
             if removeLegs:
@@ -2040,43 +2130,59 @@ class worldGenerator():
         print(f'Start Scene Nr {self.parameters["scene_nr"]}')
         print('')
         print('Add DEM')
-        
+        self.time.start_task(task='DEM Creation')
         self.add_DEM(DEM=DEM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,n_x=n_x,n_y=n_y,d_x=d_x,d_y=d_y,d_z=d_z,boundry=boundry)
+        self.time.stop_task(task='DEM Creation')
         print('finished')
         print('')
         print('Add CHM')
+        self.time.start_task(task='CHM Creation')
         self.add_CHM(CHM=CHM,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev,max_height=max_height)
+        self.time.stop_task(task='CHM Creation')
         print('finished')
         print('')
         print('Add Dominante Leaf Type')
+        self.time.start_task(task='Add Dominante Leaf Type')
         self.add_dominante_leaf_type(leaf_type_map=leaf_type_map,type_threshold=type_threshold,create_rnd=create_rnd,n_layer=n_layer,std_dev=std_dev)
+        self.time.stop_task(task='Add Dominante Leaf Type')
         print('finished')
         print('')
         print('Add Ground Vegetation')
+        self.time.start_task(task='Add Ground Vegetation')
         self.add_ground_vegetation_map()
+        self.time.stop_task(task='Add Ground Vegetation')
         print('finished')
         print('')
         
         # Adding ground objects that occupy space
         print('Spawn laying Deadwood')
+        self.time.start_task(task='Spawn Laying Deadwood')
         self.spawnDeadWoodStemSamples(self.path['laying_dw'],n_stems=n_laying_dw)
+        self.time.stop_task(task='Spawn Laying Deadwood')
         print('finished')
         print('')
-        print('Spawn Rocks')        
+        print('Spawn Rocks') 
+        self.time.start_task(task='Spawn Rocks')        
         self.spawnRocks(self.path['rocks'],n_rocks=n_rocks)
+        self.time.stop_task(task='Spawn Rocks') 
         print('finished')
         print('')
         print('Spawn Stumps')
+        self.time.start_task(task='Spawn Stumps') 
         self.spawnStumps(self.path['tree_stumps'],n_stumps=n_stumps,radius=1,lower_factor=1,elevate_factor=1/4)
+        self.time.stop_task(task='Spawn Stumps')
         print('finished')
         print('')
         print('Spawn Plants')
-        self.spawnBroadLeafedPlant(objpath=f'{self.path["ground_veg"]}\\broadLeafPlant.obj',n_sets=n_plants,set_size=15) 
+        self.time.start_task(task='Spawn Plants')
+        self.spawnBroadLeafedPlant(objpath=f'{self.path["ground_veg"]}\\broadLeafPlant.obj',n_sets=n_plants,set_size=15)
+        self.time.stop_task(task='Spawn Plants')        
         print('finished')
         print('')   
         
         # Plant trees
         print('Seed Trees')
+        self.time.start_task(task='Grow Trees')
         self.seed_rnd_trees(n_trees=n_trees)
         print('finished\n')
         print('Calculate Neighbourhood')
@@ -2084,22 +2190,29 @@ class worldGenerator():
         print('finished\n')
         print('Grow Trees')
         self.grow_trees(showLeaves=showLeaves,decimate=tree_decimate)
+        self.time.stop_task(task='Grow Trees')
         print('finished\n')
         
         # Plant understory trees
         print('Seed Understory Trees')
+        self.time.start_task(task='Grow Understory')
         self.seed_understory_trees()
         print('finished\n')
         print('Grow Understory Trees')
         self.grow_understory_trees()
+        self.time.stop_task(task='Grow Understory')
         print('finished\n')
         print('Spawn Undergrowth')
+        self.time.start_task(task='Grow Undergrowth')
         self.spawn_undergrowth_sapling_sets(n_sets=n_sets_undergrowth,set_size=set_size_undergrowth,
                                             size=size_undergrowth,dist=dist_undergrowth)
+        self.time.stop_task(task='Grow Undergrowth')
         print('finished\n')
         
         # Combine individual objects
+        self.time.start_task(task='Combining - Saving Objects')
         self.combine_objects()
+        self.time.stop_task(task='Combining - Saving Objects')
          
         # Export vertices
         print('Export Vertices')
@@ -2108,6 +2221,7 @@ class worldGenerator():
         
     def simulate_walk(self,coords=[[0,0],[-1,-1],[1,-1],[1,-0.5],[-1,-0.5],[-1,0],[1,0],[1,0.5],[-1,0.5],[-1,1],[1,1],[0,0]],distance_factor=25):
         print('Create Path DEM')
+        self.time.start_task(task='Simulate Walk')
         self.create_path_DEM()
         print('finished\n')
         print('Create Path Graph')
@@ -2122,6 +2236,7 @@ class worldGenerator():
         print('finished\n')
         print('Simulate Path')
         self.simulate_path()
+        self.time.stop_task(task='Simulate Walk')
         print('finished\n')
         
     def simulate_scan(self,removeLegs=True,save_combined=True,
@@ -2129,6 +2244,7 @@ class worldGenerator():
         if not self.parameters['save_outputs']:
             print('Simulating the scan only works after saving the outputs.\nAdd "save_objects=True" when initializing the class.')
         else:
+            self.time.start_task(task='Simulate Scan - Helios')
             print('Create Helios Legs')
             self.create_leg_4Helios_MLS()
             print('finished\n')
@@ -2137,10 +2253,13 @@ class worldGenerator():
             print('finished\n')
             print('Run Helios')
             self.run_Helios()
+            self.time.stop_task(task='Simulate Scan - Helios')
             print('finished\n')
             print('Combine Legs')
+            self.time.start_task(task='Combining Legs')
             self.combine_Helios_legs(removeLegs=removeLegs,center=center,extend=extend,max_height=max_height,
                                      create_chunks=create_chunks,chunk_size=chunk_size,save_combined=save_combined)
+            self.time.stop_task(task='Combining Legs')
             print('finished\n')
         
     def clean_scene(self):
@@ -2213,4 +2332,6 @@ scene.map_based_pipeline(DEM=None,
                          
 scene.simulate_walk(distance_factor=25)
 scene.simulate_scan()
+
+scene.time.print_task()
 
