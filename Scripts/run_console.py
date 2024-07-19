@@ -45,6 +45,7 @@ path['helios'] = pathDict['heliosPath'] if pathDict['heliosPath'].endswith('/') 
 
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
+path['helpers'] = f'{path["scripts"]}\\Functions'
 
 # Assets
 path['assets']      = f'{path["main"]}\\Assets'
@@ -65,172 +66,13 @@ path['preview'] = f'{path["main"]}\\Preview'
 for p in path.values():
     if p not in sys.path:
         sys.path.insert(1,p)
-
-# ---------------------------------------------------------------------
-#                          Functions
-# ---------------------------------------------------------------------
-# Printing
-def print4console(text2print, max_l=50):
-    print('')
-    # split string
-    text_list = text2print.split(' ')
-    current_l = 0
-    split_val = 0
-    text_l = [len(text) for text in text_list]
-    for i in range(len(text_list)):
-        if current_l == 0:
-            current_l += text_l[i]
-        else:
-            current_l += text_l[i] + 1
-            
-        if current_l >= max_l:
-            print(' '.join(text_list[split_val:i]))
-            split_val = i
-            current_l = 0
-        elif i == len(text_list)-1:
-            print(' '.join(text_list[split_val:]))
-
-# Importing Objects
-def import_obj(filepath, location=(0.0,0.0,0.0),rotation=(0.0,0.0,0.0),scale=(1.0,1.0,1.0),collision=False,permeability=0.3,stickiness=0.25):
-    # Import the .obj file
-    bpy.ops.import_scene.obj(filepath=filepath)
-    
-    # Get the imported object
-    obj = bpy.context.selected_objects[0]
-    
-    # Set the object's location
-    obj.location        = location
-    obj.rotation_euler  = rotation
-    obj.scale           = scale
-    
-    # Adding collision parameters
-    if collision:
-        obj.modifiers.new(type='COLLISION', name='collision')
-        obj.collision.permeability  = permeability
-        obj.collision.stickiness    = stickiness
         
-    obj.select_set(True)
-    
-    return obj
-
-
-def calculate_xy(x, y, l, alpha):
-    # Calculate the new x and y coordinates
-    new_x = x + l * math.cos(alpha)
-    new_y = y + l * math.sin(alpha)
-
-    return new_x, new_y
-
-def calculate_angles(d_x,d_y,d_z):
-    # Calculate the lengths of the projections of the slope onto the x, y, and z axes
-    length_x = (d_y**2 + d_z**2)**(1/2)
-    length_y = (d_x**2 + d_z**2)**(1/2)
-    length_z = (d_x**2 + d_y**2)**(1/2)
-
-    # Calculate the angles in radians
-    angle_x = np.arccos(d_x / length_x) if length_x != 0 else 0
-    angle_y = np.arccos(d_y / length_y) if length_y != 0 else 0
-    angle_z = np.arccos(d_z / length_z) if length_z != 0 else 0
-
-    return angle_x, angle_y, angle_z    
-
-def create_directories(structure, root=''):
-    for key, value in structure.items():
-        if isinstance(value, dict):
-            create_directories(value, os.path.join(root, key))
-        else:
-            os.makedirs(os.path.join(root, value), exist_ok=True)
+from functions4blender import *
+from timer import *
 
 # ---------------------------------------------------------------------
 #                            Class
 # ---------------------------------------------------------------------
-class Timer:
-    def __init__(self):
-        self.time_keeper = {'overall':{'start':datetime.now()}}
-
-    def start_task(self,task):
-        self.time_keeper[task] = {'start':datetime.now()}
-
-    def stop_task(self,task):
-        if task in self.time_keeper.keys():
-            self.time_keeper[task]['stop']      = datetime.now()
-            self.time_keeper[task]['runtime']   = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
-        else:
-            print('Task not started, available tasks:')
-            for key in self.time_keeper.keys():
-                print(key)
-
-    def print_task(self,task=None):
-        if task in self.time_keeper.keys():
-            if 'stop' not in self.time_keeper[task].keys():
-                self.time_keeper[task]['stop']  = datetime.now()
-
-            t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
-            d = t.days
-            h, rest = divmod(t.seconds, 3600)
-            m, s = divmod(rest, 60)
-
-            self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
-
-            if d > 0:
-                self.time_keeper[task]['runtime']['days']       = d
-                self.time_keeper[task]['runtime']['hours']      = h
-                self.time_keeper[task]['runtime']['minutes']    = m
-                self.time_keeper[task]['runtime']["seconds"]    = s
-            elif h > 0:
-                self.time_keeper[task]['runtime']['hours']      = h
-                self.time_keeper[task]['runtime']['minutes']    = m
-                self.time_keeper[task]['runtime']["seconds"]    = s
-            elif m > 0:
-                self.time_keeper[task]['runtime']['minutes']    = m
-                self.time_keeper[task]['runtime']["seconds"]    = s
-            elif s > 0:
-                self.time_keeper[task]['runtime']["seconds"]    = s
-            else:
-                self.time_keeper[task]['runtime']["seconds"]    = 0
-
-            print(f'Task {task} processed in:')
-
-            for key in self.time_keeper[task]['runtime'].keys():
-                if key != 'total_seconds':
-                    print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
-        elif task is None:
-            for task in self.time_keeper.keys():
-                if 'stop' not in self.time_keeper[task].keys():
-                    self.time_keeper[task]['stop']  = datetime.now()
-
-                t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
-                d = t.days
-                h, rest = divmod(t.seconds, 3600)
-                m, s = divmod(rest, 60)
-
-                self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
-
-                if d > 0:
-                    self.time_keeper[task]['runtime']['days'] = d
-                    self.time_keeper[task]['runtime']['hours'] = h
-                    self.time_keeper[task]['runtime']['minutes'] = m
-                    self.time_keeper[task]['runtime']["seconds"] = s
-                elif h > 0:
-                    self.time_keeper[task]['runtime']['hours'] = h
-                    self.time_keeper[task]['runtime']['minutes'] = m
-                    self.time_keeper[task]['runtime']["seconds"] = s
-                elif m > 0:
-                    self.time_keeper[task]['runtime']['minutes'] = m
-                    self.time_keeper[task]['runtime']["seconds"] = s
-                elif s > 0:
-                    self.time_keeper[task]['runtime']["seconds"] = s
-
-                print(f'Task {task} processed in:')
-                for key in self.time_keeper[task]['runtime'].keys():
-                    if key != 'total_seconds':
-                        print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
-        else:
-            print('Task not started, available tasks:')
-            for key in self.time_keeper.keys():
-                print(key)
-
-
 class worldGenerator():
     # -----------------------------------------------------------------
     # Start up Functions: ---------------------------------------------
@@ -607,19 +449,7 @@ class worldGenerator():
         
         # return unique values
         return np.unique(idx_list)
-    
-    def export_vertices(self):
-        if self.parameters['save_outputs']:
-            with open(f'{self.path["scene_output"]["vertices"]}\\vertices_dict.py','w') as f:
-                f.write(f'vertices = {self.vertices}')
-            
-    def import_vertices(self):
-        sys.path.insert(1,self.path['scene_output']['vertices'])
         
-        from vertices_dict import vertices   
-        
-        # Store default parameters in parameters dictionary
-        self.vertices = vertices        
             
     # -----------------------------------------------------------------
     # Maps and Vertices Info: -----------------------------------------
@@ -2213,10 +2043,6 @@ class worldGenerator():
         self.time.start_task(task='Combining - Saving Objects')
         self.combine_objects()
         self.time.stop_task(task='Combining - Saving Objects')
-         
-        # Export vertices
-        print('Export Vertices')
-        self.export_vertices()
         print('finished\n')
         
     def simulate_walk(self,coords=[[0,0],[-1,-1],[1,-1],[1,-0.5],[-1,-0.5],[-1,0],[1,0],[1,0.5],[-1,0.5],[-1,1],[1,1],[0,0]],distance_factor=25):
@@ -2303,6 +2129,7 @@ class worldGenerator():
 # ---------------------------------------------------------------------
 #                         Running Scripts
 # ---------------------------------------------------------------------
+'''
 scene = worldGenerator(path)
 
 scene.map_based_pipeline(DEM=None,
@@ -2334,4 +2161,4 @@ scene.simulate_walk(distance_factor=25)
 scene.simulate_scan()
 
 scene.time.print_task()
-
+'''
