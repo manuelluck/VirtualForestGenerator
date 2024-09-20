@@ -14,6 +14,7 @@ import bmesh
 import numpy as np
 import pandas as pd
 import math
+import random
 
 # Kd-Tree
 import mathutils
@@ -45,7 +46,6 @@ path['helios'] = pathDict['heliosPath'] if pathDict['heliosPath'].endswith('/') 
 
 # Scripts
 path['scripts'] = f'{path["main"]}\\Scripts'
-path['helpers'] = f'{path["scripts"]}\\Functions'
 
 # Assets
 path['assets']      = f'{path["main"]}\\Assets'
@@ -67,8 +67,182 @@ for p in path.values():
     if p not in sys.path:
         sys.path.insert(1,p)
         
-from functions4blender import *
-from timer import *
+# ---------------------------------------------------------------------
+#                          Functions
+# ---------------------------------------------------------------------
+# Printing
+def print4console(text2print, max_l=50):
+    print('')
+    # split string
+    text_list = text2print.split(' ')
+    current_l = 0
+    split_val = 0
+    text_l = [len(text) for text in text_list]
+    for i in range(len(text_list)):
+        if current_l == 0:
+            current_l += text_l[i]
+        else:
+            current_l += text_l[i] + 1
+            
+        if current_l >= max_l:
+            print(' '.join(text_list[split_val:i]))
+            split_val = i
+            current_l = 0
+        elif i == len(text_list)-1:
+            print(' '.join(text_list[split_val:]))
+
+# Importing Objects
+def import_obj(filepath, location=(0.0,0.0,0.0),rotation=(0.0,0.0,0.0),scale=(1.0,1.0,1.0),collision=False,permeability=0.3,stickiness=0.25):
+    # Import the .obj file
+    bpy.ops.import_scene.obj(filepath=filepath)
+    
+    # Get the imported object
+    obj = bpy.context.selected_objects[0]
+    
+    # Set the object's location
+    obj.location        = location
+    obj.rotation_euler  = rotation
+    obj.scale           = scale
+    
+    # Adding collision parameters
+    if collision:
+        obj.modifiers.new(type='COLLISION', name='collision')
+        obj.collision.permeability  = permeability
+        obj.collision.stickiness    = stickiness
+        
+    obj.select_set(True)
+    
+    return obj
+
+
+def calculate_xy(x, y, l, alpha):
+    # Calculate the new x and y coordinates
+    new_x = x + l * math.cos(alpha)
+    new_y = y + l * math.sin(alpha)
+
+    return new_x, new_y
+
+def calculate_angles(d_x,d_y,d_z):
+    # Calculate the lengths of the projections of the slope onto the x, y, and z axes
+    length_x = (d_y**2 + d_z**2)**(1/2)
+    length_y = (d_x**2 + d_z**2)**(1/2)
+    length_z = (d_x**2 + d_y**2)**(1/2)
+
+    # Calculate the angles in radians
+    angle_x = np.arccos(d_x / length_x) if length_x != 0 else 0
+    angle_y = np.arccos(d_y / length_y) if length_y != 0 else 0
+    angle_z = np.arccos(d_z / length_z) if length_z != 0 else 0
+
+    return angle_x, angle_y, angle_z    
+
+def create_directories(structure, root=''):
+    for key, value in structure.items():
+        if isinstance(value, dict):
+            create_directories(value, os.path.join(root, key))
+        else:
+            os.makedirs(os.path.join(root, value), exist_ok=True)
+            
+
+def check_crown_diameter(name='tree'):
+    min_x = 99999
+    max_x = -99999
+    for spline in bpy.data.objects[name].data.splines:
+        for point in spline.bezier_points:
+            if point.co[0] < min_x:
+                min_x = point.co[0]
+            elif point.co[0] > max_x:
+                max_x = point.co[0]
+                
+    d = max_x - min_x
+                
+    return d
+
+class Timer:
+    def __init__(self):
+        self.time_keeper = {'overall':{'start':datetime.now()}}
+
+    def start_task(self,task):
+        self.time_keeper[task] = {'start':datetime.now()}
+
+    def stop_task(self,task):
+        if task in self.time_keeper.keys():
+            self.time_keeper[task]['stop']      = datetime.now()
+            self.time_keeper[task]['runtime']   = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+        else:
+            print('Task not started, available tasks:')
+            for key in self.time_keeper.keys():
+                print(key)
+
+    def print_task(self,task=None):
+        if task in self.time_keeper.keys():
+            if 'stop' not in self.time_keeper[task].keys():
+                self.time_keeper[task]['stop']  = datetime.now()
+
+            t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+            d = t.days
+            h, rest = divmod(t.seconds, 3600)
+            m, s = divmod(rest, 60)
+
+            self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
+
+            if d > 0:
+                self.time_keeper[task]['runtime']['days']       = d
+                self.time_keeper[task]['runtime']['hours']      = h
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif h > 0:
+                self.time_keeper[task]['runtime']['hours']      = h
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif m > 0:
+                self.time_keeper[task]['runtime']['minutes']    = m
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            elif s > 0:
+                self.time_keeper[task]['runtime']["seconds"]    = s
+            else:
+                self.time_keeper[task]['runtime']["seconds"]    = 0
+
+            print(f'Task {task} processed in:')
+
+            for key in self.time_keeper[task]['runtime'].keys():
+                if key != 'total_seconds':
+                    print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
+        elif task is None:
+            for task in self.time_keeper.keys():
+                if 'stop' not in self.time_keeper[task].keys():
+                    self.time_keeper[task]['stop']  = datetime.now()
+
+                t = self.time_keeper[task]['stop'] - self.time_keeper[task]['start']
+                d = t.days
+                h, rest = divmod(t.seconds, 3600)
+                m, s = divmod(rest, 60)
+
+                self.time_keeper[task]['runtime']       = {'total_seconds':t.total_seconds()}
+
+                if d > 0:
+                    self.time_keeper[task]['runtime']['days'] = d
+                    self.time_keeper[task]['runtime']['hours'] = h
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif h > 0:
+                    self.time_keeper[task]['runtime']['hours'] = h
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif m > 0:
+                    self.time_keeper[task]['runtime']['minutes'] = m
+                    self.time_keeper[task]['runtime']["seconds"] = s
+                elif s > 0:
+                    self.time_keeper[task]['runtime']["seconds"] = s
+
+                print(f'Task {task} processed in:')
+                for key in self.time_keeper[task]['runtime'].keys():
+                    if key != 'total_seconds':
+                        print(f'{key} : {self.time_keeper[task]["runtime"][key]}')
+        else:
+            print('Task not started, available tasks:')
+            for key in self.time_keeper.keys():
+                print(key)
+
 
 # ---------------------------------------------------------------------
 #                            Class
@@ -978,6 +1152,68 @@ class worldGenerator():
                 ob.name = 'stump'
         self.objects['names'].append('stump')
         
+    def spawn_twigs(self,location,d=0.005,n=10):
+        
+        if 'twig' not in self.objects['names']:
+            self.objects['names'].append('twig')
+        
+        co_s    = np.array(location)
+        co_s[2] += d/3
+        [shift_x,shift_y] = np.random.normal(0.2, 0.5, 2)
+        counter = 0
+        while (self.parameters['extend_x']/2 < abs(co_s[0] + shift_x) and
+               self.parameters['extend_y']/2 < abs(co_s[1] + shift_y) and counter < 500):
+            [shift_x,shift_y] = np.random.normal(0.2, 0.5, 2)
+            counter += 1
+            
+        co_e    = self.calculate_z([location[0]+shift_x,location[1]+shift_y])
+        co_e[2] += d/3
+        control_points = []
+        
+        # Create a new curve object
+        curve = bpy.data.curves.new('twig', 'CURVE')
+        curve.dimensions = '3D'
+        curve.bevel_depth = d
+
+        # Create a new spline in the curve
+        spline = curve.splines.new('BEZIER')
+        spline.bezier_points.add(n)
+
+        # Assign the coordinates to the spline points
+        for p in range(len(spline.bezier_points)):
+            if p == 0:
+                co_old  = co_s
+                dir_old = (co_e-co_s)/n
+                
+                spline.bezier_points[p].co = co_old
+                spline.bezier_points[p].handle_left = co_old - dir_old/3
+                spline.bezier_points[p].handle_right = co_old + dir_old/3
+                
+            else:
+                co_new  = co_old + dir_old + np.array((random.uniform(-0.03,0.03),
+                                                       random.uniform(-0.03,0.03),
+                                                       random.uniform(0.0,0.001)))
+                dir_new = (co_e - co_new)/(n-p) 
+                
+                spline.bezier_points[p].co = co_new
+                spline.bezier_points[p].handle_left = co_new - dir_new/3
+                spline.bezier_points[p].handle_right = co_new + dir_new/3
+                spline.bezier_points[p].radius -= spline.bezier_points[p].radius * (0.025*p) 
+                
+                dir_old = dir_new
+                co_old  = co_new
+                
+            if len(spline.bezier_points)-1 >= p > 0:     
+                control_points.append({'co':co_old,'dir':dir_old})
+                
+        # Create a new object with the curve
+        obj = bpy.data.objects.new('twig', curve)
+        obj.data.use_fill_caps = True
+        obj.data.fill_mode = 'FULL'
+        bpy.context.collection.objects.link(obj)
+        
+       
+            
     def seed_rnd_trees(self,n_trees):
         # get uniform rnd nr of vertices positions to plant tree
         idx_list        = np.random.randint(len(self.vertices),size=n_trees)
@@ -1067,7 +1303,7 @@ class worldGenerator():
             seed['tree_parameters']['levels']  = 5 if seed['tree_parameters']['scale'] > 35 else 4 if seed['tree_parameters']['scale'] > 20 else 3 if seed['tree_parameters']['scale'] > 10 else 2
             
             # Total Amount of branch rings
-            seed['tree_parameters']['nrings'] = int(seed['tree_parameters']['scale']*2)
+            seed['tree_parameters']['nrings'] = 0 #int(seed['tree_parameters']['scale']*2)
     
             # Amount of branches
             branches = [int(i*scale_ratio) for i in seed['tree_parameters']['branches']]
@@ -1085,6 +1321,9 @@ class worldGenerator():
             # Splitting
             if seed['tree_parameters']['baseSplits'] > 0:
                 seed['tree_parameters']['baseSplits'] = np.random.randint(seed['tree_parameters']['baseSplits']-1,seed['tree_parameters']['baseSplits']+2)  
+
+            # Adjust Bevel Resolution according to DBH
+            seed['tree_parameters']['bevelRes'] = 10 if seed['DBH'] > 20 else 6 
                 
             shape = seed['tree_parameters']['customShape'] 
             # Close Crown
@@ -1114,6 +1353,21 @@ class worldGenerator():
             seed['tree_parameters']['showLeaves'] = showLeaves
                         
             bpy.ops.curve.tree_add(**seed['tree_parameters'])
+            
+            seed['crown_diameter'] = check_crown_diameter()
+            twig_count = 0
+            while twig_count < 10:
+                [shift_x,shift_y] = np.random.uniform(-seed['crown_diameter']/2,seed['crown_diameter']/2, 2)
+                pos = self.calculate_z([seed['blend_coord'][0]+shift_x,seed['blend_coord'][1]+shift_y])
+                counter = 0
+                while abs(pos[0]) > self.parameters['extend_x']/2 and abs(pos[1]) > self.parameters['extend_y']/2 and counter < 500:
+                    [shift_x,shift_y] = np.random.uniform(-seed['crown_diameter'],seed['crown_diameter'], 2)
+                    pos = self.calculate_z([seed['blend_coord'][0]+shift_x,seed['blend_coord'][1]+shift_y])
+                    counter += 1                    
+                if abs(pos[0]) < self.parameters['extend_x']/2 and abs(pos[1]) < self.parameters['extend_y']/2:
+                    twig_count += 1
+                    self.spawn_twigs(pos,d=0.01,n=5)
+                                                            
             
             ## Leaves
             if seed['tree_parameters']['showLeaves']:
@@ -1160,14 +1414,32 @@ class worldGenerator():
                 for point in tree.data.splines[stem].bezier_points:
                     point.select_control_point = True
 
-            # Separate the selected points into a new object
+           # Separate the selected points into a new object
             bpy.ops.curve.separate()
 
             # Go back to object mode
             bpy.ops.object.mode_set(mode='OBJECT')
+            
+            bpy.ops.object.convert(target='MESH')
+            
+            bpy.context.view_layer.objects.active = bpy.data.objects['temporary']
 
+            # Make sure the branch is selected
+            bpy.data.objects['temporary'].select_set(True)
+
+            # Set modifier
+            bpy.data.objects['temporary'].modifiers.new("deci", 'DECIMATE')
+
+            # Set the modifier properties
+            mod                 = bpy.data.objects['temporary'].modifiers["deci"]
+            mod.decimate_type   = 'DISSOLVE'
+            mod.angle_limit     = 0.08
+
+            # Apply modifier
+            bpy.ops.object.modifier_apply(modifier="deci",single_user=True)
+            
             bpy.data.objects['temporary'].name      = 'branches'
-            bpy.data.objects['temporary.001'].name  = 'stem'
+            bpy.data.objects['temporary.001'].name  = 'stem' 
             
     def seed_understory_trees(self,distance=5,n_trees=3):
         self.understory_seeds = []
@@ -1225,7 +1497,7 @@ class worldGenerator():
             seed['tree_parameters']['levels']  =  2
             
             # Total Amount of branch rings
-            seed['tree_parameters']['nrings'] = 10
+            seed['tree_parameters']['nrings'] = 0
     
             # Amount of branches
             branches = [int(i*scale_ratio) for i in seed['tree_parameters']['branches']]
@@ -1237,6 +1509,9 @@ class worldGenerator():
             # Calcualte DBH
             seed['DBH'] = (seed['tree_parameters']['scale']*seed['tree_parameters']['ratio']*seed['tree_parameters']['scale0'])*2
             
+            # Adjust Bevel Resolution according to DBH
+            seed['tree_parameters']['bevelRes'] = 10 if seed['DBH'] > 20 else 6 
+            
             # Rnd Seed
             seed['tree_parameters']['seed'] = np.random.randint(1000)
             
@@ -1247,7 +1522,7 @@ class worldGenerator():
             # Adjust parameter based on manual input
             # Show leaves
             seed['tree_parameters']['showLeaves'] = showLeaves
-                        
+            
             bpy.ops.curve.tree_add(**seed['tree_parameters'])
             
             ## Leaves
@@ -1300,15 +1575,34 @@ class worldGenerator():
 
             # Go back to object mode
             bpy.ops.object.mode_set(mode='OBJECT')
+            
+            bpy.ops.object.convert(target='MESH')
+            
+            bpy.context.view_layer.objects.active = bpy.data.objects['temporary']
 
+            # Make sure the branch is selected
+            bpy.data.objects['temporary'].select_set(True)
+
+            # Set modifier
+            bpy.data.objects['temporary'].modifiers.new("deci", 'DECIMATE')
+
+            # Set the modifier properties
+            mod                 = bpy.data.objects['temporary'].modifiers["deci"]
+            mod.decimate_type   = 'DISSOLVE'
+            mod.angle_limit     = 0.08
+
+            # Apply modifier
+            bpy.ops.object.modifier_apply(modifier="deci",single_user=True)
+            
             bpy.data.objects['temporary'].name      = 'branches'
             bpy.data.objects['temporary.001'].name  = 'stem'  
         
     def spawn_undergrowth_sapling_sets(self,n_sets=15,set_size=25,size=4,dist=5,remove_after_save=False,showLeaves=True):
-        def plant_sapling(size=2, sizeV=0.5, stem=1, stemV=0.1, bevel=True, showLeaves=True, seed=0, curveRes=(10, 8, 3, 1), curve=(0, 30, 25, 0), curveV=(10, 10, 25, 0), curveBack=(0, 0, 0, 0), rootFlare=1.15, ratio=0.02, minRadius=0.002, baseSplits=2, segSplits=(0.35, 0.35, 0.35, 0), splitByLen=True, rMode='rotate', splitStraight=0, splitLength=0, splitAngle=(20, 36, 32, 0), splitAngleV=(2, 2, 0, 0), splitHeight=0.5, splitBias=0, baseSize=0.35, baseSize_s=0.8, branchDist=1.5, nrings=-1, levels=2, branches=(0, 20, 10, 5), length=(1, 0.33, 0.375, 0.45), lengthV=(0.05, 0.2, 0.35, 0), attractUp=(0, -1, -0.65, 0), attractOut=(0, 0.2, 0.25, 0), shape='8', shapeS='7', customShape=(1, 1, 0.5, 1), downAngle=(90, 60, 50, 45), downAngleV=(0, 25, 30, 10), useOldDownAngle=False, useParentAngle=True, rotate=(99.5, 137.5, 137.5, 137.5), rotateV=(0, 0, 0, 0), leaves=16, leafType='0', leafDownAngle=45, leafDownAngleV=10, leafRotate=137.5, leafRotateV=0, leafObjZ='+2', leafObjY='+1', leafScale=0.2, leafScaleX=0.5, leafScaleT=0.2, leafScaleV=0.25, leafShape='hex', leafangle=-45, leafDist='6', leafBaseSize=0.2, closeTip=True, noTip=False, autoTaper=True, taper=(1, 1, 1, 1), radiusTweak=(1, 1, 1, 1), ratioPower=1, attachment='0'):
+        def plant_sapling(size=2, sizeV=0.5, stem=1, stemV=0.1, bevel=True, bevelRes=5, showLeaves=True, seed=0, curveRes=(10, 8, 3, 1), curve=(0, 30, 25, 0), curveV=(10, 10, 25, 0), curveBack=(0, 0, 0, 0), rootFlare=1.15, ratio=0.02, minRadius=0.002, baseSplits=2, segSplits=(0.35, 0.35, 0.35, 0), splitByLen=True, rMode='rotate', splitStraight=0, splitLength=0, splitAngle=(20, 36, 32, 0), splitAngleV=(2, 2, 0, 0), splitHeight=0.5, splitBias=0, baseSize=0.35, baseSize_s=0.8, branchDist=1.5, nrings=-1, levels=2, branches=(0, 20, 10, 5), length=(1, 0.33, 0.375, 0.45), lengthV=(0.05, 0.2, 0.35, 0), attractUp=(0, -1, -0.65, 0), attractOut=(0, 0.2, 0.25, 0), shape='8', shapeS='7', customShape=(1, 1, 0.5, 1), downAngle=(90, 60, 50, 45), downAngleV=(0, 25, 30, 10), useOldDownAngle=False, useParentAngle=True, rotate=(99.5, 137.5, 137.5, 137.5), rotateV=(0, 0, 0, 0), leaves=16, leafType='0', leafDownAngle=45, leafDownAngleV=10, leafRotate=137.5, leafRotateV=0, leafObjZ='+2', leafObjY='+1', leafScale=0.2, leafScaleX=0.5, leafScaleT=0.2, leafScaleV=0.25, leafShape='hex', leafangle=-45, leafDist='6', leafBaseSize=0.2, closeTip=True, noTip=False, autoTaper=True, taper=(1, 1, 1, 1), radiusTweak=(1, 1, 1, 1), ratioPower=1, attachment='0'):
             tree = bpy.ops.curve.tree_add(
                                         # General Props
-                                        bevel=bevel, 
+                                        bevel=bevel,
+                                        bevelRes=bevelRes, 
                                         showLeaves=showLeaves, 
                                         seed=seed, 
                                         curveRes=curveRes, 
@@ -1473,14 +1767,33 @@ class worldGenerator():
                             for point in tree.data.splines[stem].bezier_points:
                                 point.select_control_point = True
 
-                        # Separate the selected points into a new object
+                       # Separate the selected points into a new object
                         bpy.ops.curve.separate()
 
                         # Go back to object mode
                         bpy.ops.object.mode_set(mode='OBJECT')
+                        
+                        bpy.ops.object.convert(target='MESH')
+                        
+                        bpy.context.view_layer.objects.active = bpy.data.objects['temporary']
 
+                        # Make sure the branch is selected
+                        bpy.data.objects['temporary'].select_set(True)
+
+                        # Set modifier
+                        bpy.data.objects['temporary'].modifiers.new("deci", 'DECIMATE')
+
+                        # Set the modifier properties
+                        mod                 = bpy.data.objects['temporary'].modifiers["deci"]
+                        mod.decimate_type   = 'DISSOLVE'
+                        mod.angle_limit     = 0.08
+
+                        # Apply modifier
+                        bpy.ops.object.modifier_apply(modifier="deci",single_user=True)
+                        
                         bpy.data.objects['temporary'].name      = 'branches'
-                        bpy.data.objects['temporary.001'].name  = 'stem'
+                        bpy.data.objects['temporary.001'].name  = 'stem' 
+
 
     def combine_objects(self,remove_after_save=False):
         for obj_name in self.objects['names']:
@@ -1853,7 +2166,7 @@ class worldGenerator():
         #self.combine_Helios_legs()
     def label_converter(self,l,combined_classes=[{'label':1,'keywords':['ground','rock']},
                                                  {'label':2,'keywords':['plant','leaves','branches','needles','leaf','sapling']},
-                                                 {'label':3,'keywords':['dw','stump']},
+                                                 {'label':3,'keywords':['dw','stump','twig']},
                                                  {'label':4,'keywords':['birch','pine','maple','stem']}]):
         cla = -1                                         
         for classes in combined_classes:
@@ -2112,53 +2425,40 @@ class worldGenerator():
             if block.users == 0:
                 bpy.data.images.remove(block)               
 
-    # -----------------------------------------------------------------
-    # Work in Progress: -----------------------------------------------
-    # -----------------------------------------------------------------  
-    def add_tree_by_dict(self,tree_dict):
-        if type(tree_dict) == dict:
-            for tree in tree_dict:
-                location = calculate_z((tree['x'],tree['y']))
-                
-                pos,id,_ = self.kdTrees['kd_3D'].find(location)
-                
-                self.vertices[id]['tree'] = tree 
-
  
         
 # ---------------------------------------------------------------------
 #                         Running Scripts
 # ---------------------------------------------------------------------
-'''
+
 scene = worldGenerator(path)
 
 scene.map_based_pipeline(DEM=None,
                          CHM=None,
                          leaf_type_map=None,
                          n_trees=90,
-                         n_rocks=5,
-                         n_stumps=10,
-                         n_laying_dw=60,
-                         n_plants=50,
-                         n_sets_undergrowth=5,
+                         n_rocks=25,
+                         n_stumps=30,
+                         n_laying_dw=30,
+                         n_plants=25,
+                         n_sets_undergrowth=2,
                          set_size_undergrowth=15,
                          size_undergrowth=3,
                          dist_undergrowth=5,
                          showLeaves=True,
                          type_threshold=0.5,
-                         n_x=550,
-                         n_y=550,
+                         n_x=400,
+                         n_y=400,
                          d_x=0.1,
                          d_y=0.1,
-                         d_z=5,
+                         d_z=2,
                          max_height=35,
                          boundry=2,
                          create_rnd=True,
                          n_layer=5,
                          std_dev=5.0)
-                         
-scene.simulate_walk(distance_factor=25)
+                     
+scene.simulate_walk(distance_factor=17.5)
 scene.simulate_scan()
 
 scene.time.print_task()
-'''
